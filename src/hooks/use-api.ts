@@ -2,6 +2,16 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   api,
   ApiPost,
+  ApiSection,
+  ApiSectionNode,
+  SectionTreeResponse,
+  SectionDetailResponse,
+  SectionPostsResponse,
+  SectionMutationResponse,
+  SectionDeleteResponse,
+  CreateSectionRequest,
+  UpdateSectionRequest,
+  MovePostsRequest,
   PostListResponse,
   TagResponse,
   CreatePostRequest,
@@ -19,6 +29,7 @@ export const queryKeys = {
   adminPost: (id: string) => ["admin", "posts", id] as const,
   tags: ["tags"] as const,
   auth: ["auth"] as const,
+  sections: ["sections"] as const,
 };
 
 // ============================================
@@ -211,6 +222,87 @@ export function useLogout() {
     },
     onSuccess: () => {
       queryClient.clear();
+    },
+  });
+}
+
+// ============================================
+// Section Hooks
+// ============================================
+
+export function useSectionTree() {
+  return useQuery<SectionTreeResponse, ApiClientError>({
+    queryKey: queryKeys.sections,
+    queryFn: () => api.getSectionTree(),
+    staleTime: 1000 * 60 * 5,
+  });
+}
+
+export function useSectionBySlug(slug: string, includeChildren = true) {
+  return useQuery<SectionDetailResponse, ApiClientError>({
+    queryKey: [...queryKeys.sections, "detail", slug],
+    queryFn: () => api.getSectionBySlug(slug, includeChildren),
+    enabled: !!slug,
+    staleTime: 1000 * 60 * 5,
+  });
+}
+
+export function useSectionPosts(
+  slug: string,
+  params?: { includeChildren?: boolean; limit?: number; offset?: number }
+) {
+  return useQuery<SectionPostsResponse, ApiClientError>({
+    queryKey: [...queryKeys.sections, "posts", slug, params],
+    queryFn: () => api.getSectionPosts(slug, params),
+    enabled: !!slug,
+    staleTime: 1000 * 60 * 2,
+  });
+}
+
+export function useCreateSection() {
+  const queryClient = useQueryClient();
+  return useMutation<SectionMutationResponse, ApiClientError, CreateSectionRequest>({
+    mutationFn: (data) => api.createSection(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.sections });
+    },
+  });
+}
+
+export function useUpdateSection() {
+  const queryClient = useQueryClient();
+  return useMutation<
+    SectionMutationResponse,
+    ApiClientError,
+    { id: string; data: UpdateSectionRequest }
+  >({
+    mutationFn: ({ id, data }) => api.updateSection(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.sections });
+    },
+  });
+}
+
+export function useDeleteSection() {
+  const queryClient = useQueryClient();
+  return useMutation<SectionDeleteResponse, ApiClientError, string>({
+    mutationFn: (id) => api.deleteSection(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.sections });
+      queryClient.invalidateQueries({ queryKey: queryKeys.adminPosts });
+      queryClient.invalidateQueries({ queryKey: queryKeys.posts });
+    },
+  });
+}
+
+export function useMovePosts() {
+  const queryClient = useQueryClient();
+  return useMutation<{ message: string; movedCount: number }, ApiClientError, MovePostsRequest>({
+    mutationFn: (data) => api.movePosts(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.adminPosts });
+      queryClient.invalidateQueries({ queryKey: queryKeys.posts });
+      queryClient.invalidateQueries({ queryKey: queryKeys.sections });
     },
   });
 }

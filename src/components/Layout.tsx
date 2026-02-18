@@ -138,11 +138,11 @@ const Layout = ({ children }: LayoutProps) => {
       <footer className="border-t border-border/50 py-4 sm:py-6">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 lg:px-12 flex flex-col sm:flex-row items-center justify-between gap-3">
           <p className="text-xs text-muted-foreground text-center sm:text-left">
-            Built with curiosity and too much coffee.
+            Built with curiosity, built for a cause.
           </p>
           <div className="flex items-center gap-4 sm:gap-5">
-            <a href="https://github.com" target="_blank" rel="noopener noreferrer" className="text-xs text-muted-foreground hover:text-foreground transition-colors">GitHub</a>
-            <a href="https://linkedin.com" target="_blank" rel="noopener noreferrer" className="text-xs text-muted-foreground hover:text-foreground transition-colors">LinkedIn</a>
+            <a href="https://github.com/Manoo07" target="_blank" rel="noopener noreferrer" className="text-xs text-muted-foreground hover:text-foreground transition-colors">GitHub</a>
+            <a href="https://www.linkedin.com/in/manohar-boinapally-81a131205/" target="_blank" rel="noopener noreferrer" className="text-xs text-muted-foreground hover:text-foreground transition-colors">LinkedIn</a>
             <a href="https://twitter.com" target="_blank" rel="noopener noreferrer" className="text-xs text-muted-foreground hover:text-foreground transition-colors">Twitter</a>
           </div>
         </div>

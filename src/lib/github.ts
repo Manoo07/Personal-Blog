@@ -52,27 +52,28 @@ export class GitHubAPI {
     }
   }
 
-  async getPublicRepos(limit: number = 10): Promise<GitHubRepo[]> {
+  async getPublicRepos(limit: number = 30): Promise<GitHubRepo[]> {
     const url = `${GITHUB_API_BASE}/users/${GITHUB_USERNAME}/repos?type=public&sort=updated&per_page=${limit}`;
     return this.fetchWithErrorHandling<GitHubRepo[]>(url);
   }
 
   async getRecentRepos(limit: number = 6): Promise<ProjectFromRepo[]> {
     try {
-      const repos = await this.getPublicRepos(limit);
+      // Fetch a larger pool so filtering still leaves enough results
+      const repos = await this.getPublicRepos(50);
       
       return repos
         .filter(repo => !repo.fork) // Exclude forks
-        .filter(repo => repo.description) // Only repos with descriptions
+        .slice(0, limit)
         .map(repo => ({
           title: repo.name
-            .split('-')
+            .split(/[-_]/)
             .map(word => word.charAt(0).toUpperCase() + word.slice(1))
             .join(' '),
           description: repo.description || 'No description available',
           tags: [
             ...(repo.language ? [repo.language.toLowerCase()] : []),
-            ...repo.topics.slice(0, 3), // Limit topics to 3
+            ...repo.topics.slice(0, 3),
           ].filter(Boolean),
           github: repo.html_url,
           link: repo.homepage || undefined,

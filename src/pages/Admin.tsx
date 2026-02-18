@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import Layout from "@/components/Layout";
 import Breadcrumb from "@/components/Breadcrumb";
 import TagInput from "@/components/TagInput";
-import { Pencil, Trash2, Plus, Save, Eye, Code, LogOut, Loader2, Globe, FileText } from "lucide-react";
+import SectionTreeDropdown from "@/components/SectionTreeDropdown";
+import { Pencil, Trash2, Plus, Save, Eye, Code, LogOut, Loader2, Globe, FileText, FolderTree } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
@@ -17,6 +18,7 @@ import {
   useDeletePost,
   usePublishPost,
   useUnpublishPost,
+  useSectionTree,
 } from "@/hooks/use-api";
 import { isAuthenticated, getToken } from "@/lib/api";
 import type { ApiPost, CreatePostRequest, UpdatePostRequest } from "@/lib/api";
@@ -33,6 +35,7 @@ interface EditablePost {
   coverImage: string;
   status: "DRAFT" | "PUBLISHED";
   readingTime: number;
+  sectionId: string | null;
 }
 
 const Admin = () => {
@@ -61,6 +64,8 @@ const Admin = () => {
   const deleteMutation = useDeletePost();
   const publishMutation = usePublishPost();
   const unpublishMutation = useUnpublishPost();
+  const { data: sectionData, isLoading: isLoadingSections } = useSectionTree();
+  const sections = sectionData?.sections ?? [];
 
   // Check if user is authenticated
   const hasToken = !!getToken();
@@ -169,6 +174,7 @@ const Admin = () => {
     coverImage: "",
     status: "DRAFT",
     readingTime: 5,
+    sectionId: null,
   };
 
   const handleEdit = (post: ApiPost | typeof posts[number]) => {
@@ -182,6 +188,7 @@ const Admin = () => {
       coverImage: post.coverImage || "",
       status: "status" in post ? (post.status as "DRAFT" | "PUBLISHED") : "DRAFT",
       readingTime: post.readingTime,
+      sectionId: (post as any).sectionId ?? null,
     });
     setIsCreating(false);
     setShowPreview(false);
@@ -208,6 +215,7 @@ const Admin = () => {
           tags: editingPost.tags,
           coverImage: editingPost.coverImage || null,
           status: editingPost.status,
+          sectionId: editingPost.sectionId || null,
         };
         await createMutation.mutateAsync(createData);
       } else if (editingPost.id) {
@@ -219,6 +227,7 @@ const Admin = () => {
           tags: editingPost.tags,
           coverImage: editingPost.coverImage || null,
           status: editingPost.status,
+          sectionId: editingPost.sectionId,
         };
         await updateMutation.mutateAsync({ id: editingPost.id, data: updateData });
       }
@@ -361,6 +370,19 @@ const Admin = () => {
               />
             </div>
 
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1">
+                Section
+                <span className="ml-1.5 text-xs font-normal text-muted-foreground">(optional)</span>
+              </label>
+              <SectionTreeDropdown
+                sections={sections}
+                selectedId={editingPost.sectionId}
+                onChange={(id) => updateField("sectionId", id)}
+                isLoading={isLoadingSections}
+              />
+            </div>
+
             {/* Content + Live Preview */}
             <div>
               <label className="block text-sm font-medium text-foreground mb-1">
@@ -463,8 +485,15 @@ const Admin = () => {
               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border border-border/40 text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
             >
               <LogOut className="w-3.5 h-3.5" />
-            <span className="hidden xs:inline">Logout</span>
-          </button>
+              <span className="hidden xs:inline">Logout</span>
+            </button>
+            <Link
+              to="/manohar/sections"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border border-border/40 text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+            >
+              <FolderTree className="w-3.5 h-3.5" />
+              <span className="hidden xs:inline">Sections</span>
+            </Link>
             <button
               onClick={handleCreate}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity"

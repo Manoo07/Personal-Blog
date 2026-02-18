@@ -12,6 +12,8 @@ export interface ApiPost {
   coverImage: string | null;
   status: "DRAFT" | "PUBLISHED";
   readingTime: number;
+  sectionId: string | null;
+  section?: SectionSummary | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -24,6 +26,9 @@ export interface ApiPostSummary {
   tags: string[];
   coverImage: string | null;
   readingTime: number;
+  /** sectionId is not returned by list endpoints — use section?.id instead */
+  sectionId?: string | null;
+  section?: SectionSummary | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -63,6 +68,7 @@ export interface CreatePostRequest {
   tags?: string[];
   coverImage?: string | null;
   status?: "DRAFT" | "PUBLISHED";
+  sectionId?: string | null;
 }
 
 export interface UpdatePostRequest {
@@ -73,6 +79,93 @@ export interface UpdatePostRequest {
   tags?: string[];
   coverImage?: string | null;
   status?: "DRAFT" | "PUBLISHED";
+  sectionId?: string | null;
+}
+
+// ============================================
+// Section Types
+// ============================================
+
+/** Lightweight section reference embedded inside posts */
+export interface SectionSummary {
+  id: string;
+  slug: string;
+  name: string;
+  description: string | null;
+}
+
+/** Full section object (flat, from admin/detail responses) */
+export interface ApiSection {
+  id: string;
+  slug: string;
+  name: string;
+  description: string | null;
+  order: number;
+  parentId: string | null;
+  createdAt: string;
+  updatedAt: string;
+  _count?: {
+    posts: number;
+    children: number;
+  };
+}
+
+/** Section with recursively nested children (used in the tree) */
+export interface ApiSectionNode extends ApiSection {
+  children: ApiSectionNode[];
+}
+
+/** Breadcrumb item returned by GET /api/sections/{slug} */
+export interface SectionBreadcrumb {
+  id: string;
+  slug: string;
+  name: string;
+}
+
+// ── Response envelopes ────────────────────────────────────────────
+
+export interface SectionTreeResponse {
+  sections: ApiSectionNode[];
+}
+
+export interface SectionDetailResponse {
+  section: ApiSection & { breadcrumbs?: SectionBreadcrumb[] };
+}
+
+export interface SectionPostsResponse {
+  posts: ApiPostSummary[];
+  pagination: Pagination;
+}
+
+export interface SectionMutationResponse {
+  section: ApiSection;
+}
+
+export interface SectionDeleteResponse {
+  message: string;
+}
+
+// ── Request bodies ────────────────────────────────────────────────
+
+export interface CreateSectionRequest {
+  name: string;
+  slug: string;
+  description?: string;
+  parentId?: string | null;
+  order?: number;
+}
+
+export interface UpdateSectionRequest {
+  name?: string;
+  slug?: string;
+  description?: string;
+  parentId?: string | null;
+  order?: number;
+}
+
+export interface MovePostsRequest {
+  postIds: string[];
+  sectionId: string | null;
 }
 
 export interface ApiError {
@@ -258,6 +351,72 @@ class ApiClient {
   async unpublishPost(id: string): Promise<ApiPost> {
     return this.request(`/api/admin/posts/${id}/unpublish`, {
       method: "POST",
+    });
+  }
+
+  // ============================================
+  // Sections  (routes per OpenAPI spec)
+  // ============================================
+
+  /** GET /api/sections/tree — public */
+  async getSectionTree(): Promise<SectionTreeResponse> {
+    return this.request("/api/sections/tree");
+  }
+
+  /** GET /api/sections/{slug} — public */
+  async getSectionBySlug(
+    slug: string,
+    includeChildren = true
+  ): Promise<SectionDetailResponse> {
+    const q = includeChildren ? "?includeChildren=true" : "";
+    return this.request(`/api/sections/${slug}${q}`);
+  }
+
+  /** GET /api/sections/{slug}/posts — public */
+  async getSectionPosts(
+    slug: string,
+    params?: { includeChildren?: boolean; limit?: number; offset?: number }
+  ): Promise<SectionPostsResponse> {
+    const sp = new URLSearchParams();
+    if (params?.includeChildren != null)
+      sp.set("includeChildren", String(params.includeChildren));
+    if (params?.limit != null) sp.set("limit", String(params.limit));
+    if (params?.offset != null) sp.set("offset", String(params.offset));
+    const q = sp.toString();
+    return this.request(`/api/sections/${slug}/posts${q ? `?${q}` : ""}`);
+  }
+
+  /** POST /api/sections — auth required, returns { section } */
+  async createSection(data: CreateSectionRequest): Promise<SectionMutationResponse> {
+    return this.request("/api/sections", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  /** PUT /api/sections/{id} — auth required, returns { section } */
+  async updateSection(
+    id: string,
+    data: UpdateSectionRequest
+  ): Promise<SectionMutationResponse> {
+    return this.request(`/api/sections/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  }
+
+  /** DELETE /api/sections/{id} — auth required, returns { message } */
+  async deleteSection(id: string): Promise<SectionDeleteResponse> {
+    return this.request(`/api/sections/${id}`, {
+      method: "DELETE",
+    });
+  }
+
+  /** POST /api/sections/move-posts — auth required */
+  async movePosts(data: MovePostsRequest): Promise<{ message: string; movedCount: number }> {
+    return this.request("/api/sections/move-posts", {
+      method: "POST",
+      body: JSON.stringify(data),
     });
   }
 }

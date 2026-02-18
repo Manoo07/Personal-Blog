@@ -35,6 +35,16 @@ const markdownComponents: Components = {
       </div>
     );
   },
+
+  // Wrap every table in a horizontally-scrollable container so it
+  // never overflows on small screens.
+  table({ children, ...props }) {
+    return (
+      <div className="table-responsive-wrapper">
+        <table {...props}>{children}</table>
+      </div>
+    );
+  },
 };
 
 const BlogPost = () => {

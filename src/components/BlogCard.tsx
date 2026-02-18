@@ -5,9 +5,12 @@ import type { ApiPostSummary } from "@/lib/api";
 interface BlogCardProps {
   post: BlogPost | ApiPostSummary;
   index?: number;
+  showSection?: boolean;
 }
 
-const BlogCard = ({ post, index = 0 }: BlogCardProps) => {
+const BlogCard = ({ post, index = 0, showSection = false }: BlogCardProps) => {
+  const section = "section" in post ? post.section : null;
+
   return (
     <Link
       to={`/blog/${post.slug}`}
@@ -16,9 +19,16 @@ const BlogCard = ({ post, index = 0 }: BlogCardProps) => {
     >
       <div className="flex flex-col gap-1.5">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-4">
-          <h3 className="text-base font-medium text-foreground group-hover:text-primary transition-colors line-clamp-2 pr-2 sm:pr-0">
-            {post.title}
-          </h3>
+          <div className="flex items-center gap-2 min-w-0">
+            <h3 className="text-base font-medium text-foreground group-hover:text-primary transition-colors line-clamp-2 pr-2 sm:pr-0">
+              {post.title}
+            </h3>
+            {showSection && section && (
+              <span className="hidden sm:inline shrink-0 text-[10px] font-mono px-1.5 py-0.5 rounded bg-primary/10 text-primary">
+                {section.name}
+              </span>
+            )}
+          </div>
           <div className="flex items-center gap-2 text-xs text-muted-foreground shrink-0">
             <time>{new Date(post.createdAt).toLocaleDateString("en-US", {
               month: "short",

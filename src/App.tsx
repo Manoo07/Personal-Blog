@@ -9,6 +9,7 @@ import Blog from "./pages/Blog";
 import BlogPost from "./pages/BlogPost";
 import Projects from "./pages/Projects";
 import Admin from "./pages/Admin";
+import AdminSections from "./pages/AdminSections";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient({
@@ -39,6 +40,8 @@ const App = () => (
           <Route path="/blog/:slug" element={<BlogPost />} />
           <Route path="/projects" element={<Projects />} />
           <Route path="/mano-admin" element={<Admin />} />
+          <Route path="/manohar" element={<Admin />} />
+          <Route path="/manohar/sections" element={<AdminSections />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

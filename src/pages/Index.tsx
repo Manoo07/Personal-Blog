@@ -8,7 +8,7 @@ import { getAssetPath } from "@/lib/assets";
 import { ArrowRight, Loader2, FileText } from "lucide-react";
 
 const Index = () => {
-  const { data: postsData, isLoading: postsLoading } = usePosts({ limit: 4, sort: "createdAt", order: "desc" });
+  const { data: postsData, isLoading: postsLoading } = usePosts({ limit: 5, sort: "createdAt", order: "desc" });
   const { data: githubProjects } = useGitHubRepos(4);
   const recentPosts = postsData?.posts || [];
   const featuredProjects = githubProjects?.slice(0, 2) || [];
@@ -26,11 +26,15 @@ const Index = () => {
               <br />
               <span className="text-muted-foreground">Software Engineer</span>
             </h1>
+            <p className="text-sm sm:text-base text-muted-foreground max-w-lg mx-auto lg:mx-0 leading-relaxed mb-3">
+              I'm passionate about technology and continuous learning. I enjoy understanding how
+              things work behind the scenes and turning ideas into practical solutions. My focus
+              is on building strong fundamentals and applying them to real-world problems.
+            </p>
             <p className="text-sm sm:text-base text-muted-foreground max-w-lg mx-auto lg:mx-0 leading-relaxed mb-5">
-              Associate Software Engineer @ OSI Digital | AWS Certified | BE OU'24
-              <br />
-              I specialize in building scalable web applications with React, Node.js, and cloud technologies. 
-              Passionate about distributed systems, API design, and modern DevOps practices.
+              Through this blog, I share what I learn, the challenges I face, and the solutions
+              I discover along the way. My goal is to simplify technical concepts and make them
+              easy to understand for everyone.
             </p>
             <div className="flex flex-col sm:flex-row items-center gap-3 justify-center lg:justify-start">
               <Link
@@ -101,6 +105,14 @@ const Index = () => {
               {recentPosts.map((post, i) => (
                 <BlogCard key={post.slug} post={post} index={i} />
               ))}
+              <div className="mt-4 text-center">
+                <Link
+                  to="/blog"
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md border border-border text-sm text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+                >
+                  See more posts <ArrowRight className="w-3.5 h-3.5" />
+                </Link>
+              </div>
             </>
           )}
         </div>
