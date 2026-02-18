@@ -1,6 +1,6 @@
 import { Link, useLocation } from "react-router-dom";
 import { ReactNode, useState } from "react";
-import { Menu, X } from "lucide-react";
+import { Menu, X, Github, Linkedin } from "lucide-react";
 
 interface LayoutProps {
   children: ReactNode;
@@ -11,6 +11,11 @@ const navLinks = [
   { to: "/about", label: "About" },
   { to: "/projects", label: "Projects" },
   { to: "/blog", label: "Blog" },
+];
+
+const socialLinks = [
+  { href: "https://github.com/Manoo07", icon: Github, label: "GitHub" },
+  { href: "https://www.linkedin.com/in/manohar-boinapally-81a131205/", icon: Linkedin, label: "LinkedIn" },
 ];
 
 const Layout = ({ children }: LayoutProps) => {
@@ -52,6 +57,25 @@ const Layout = ({ children }: LayoutProps) => {
                 {link.label}
               </Link>
             ))}
+            
+            {/* Social Links */}
+            <div className="flex items-center gap-3 ml-2 pl-3 border-l border-border/50">
+              {socialLinks.map((social) => {
+                const Icon = social.icon;
+                return (
+                  <a
+                    key={social.href}
+                    href={social.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-muted-foreground hover:text-foreground transition-colors p-1.5 hover:bg-secondary/50 rounded-md"
+                    aria-label={social.label}
+                  >
+                    <Icon className="w-4 h-4" />
+                  </a>
+                );
+              })}
+            </div>
           </div>
 
           {/* Mobile Menu Button */}
@@ -82,6 +106,28 @@ const Layout = ({ children }: LayoutProps) => {
                   {link.label}
                 </Link>
               ))}
+              
+              {/* Mobile Social Links */}
+              <div className="pt-2 mt-3 border-t border-border/50">
+                <div className="flex items-center gap-4">
+                  {socialLinks.map((social) => {
+                    const Icon = social.icon;
+                    return (
+                      <a
+                        key={social.href}
+                        href={social.href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={closeMobileMenu}
+                        className="flex items-center gap-2 py-2 px-3 rounded-md text-sm text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors"
+                      >
+                        <Icon className="w-4 h-4" />
+                        <span>{social.label}</span>
+                      </a>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           </div>
         )}
