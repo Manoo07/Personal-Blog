@@ -1,5 +1,5 @@
 import { useParams, Link } from "react-router-dom";
-import ReactMarkdown from "react-markdown";
+import ReactMarkdown, { Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
 import Layout from "@/components/Layout";
@@ -7,6 +7,35 @@ import Breadcrumb from "@/components/Breadcrumb";
 import BlogSidebar from "@/components/BlogSidebar";
 import { usePost } from "@/hooks/use-api";
 import { Loader2 } from "lucide-react";
+
+/** Custom renderers for ReactMarkdown */
+const markdownComponents: Components = {
+  pre({ children, ...props }) {
+    // Extract language from the child <code> element's className
+    let language = "";
+    if (
+      children &&
+      typeof children === "object" &&
+      "props" in (children as any)
+    ) {
+      const codeProps = (children as any).props;
+      const className = codeProps?.className || "";
+      const match = className.match(/language-(\w+)/);
+      if (match) language = match[1];
+    }
+
+    return (
+      <div className="code-block-wrapper">
+        {language && (
+          <div className="code-block-lang">
+            {language}
+          </div>
+        )}
+        <pre {...props}>{children}</pre>
+      </div>
+    );
+  },
+};
 
 const BlogPost = () => {
   const { slug } = useParams<{ slug: string }>();
@@ -87,6 +116,7 @@ const BlogPost = () => {
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
                 rehypePlugins={[rehypeHighlight]}
+                components={markdownComponents}
               >
                 {post.content}
               </ReactMarkdown>

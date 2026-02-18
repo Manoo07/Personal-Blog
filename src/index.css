@@ -4,6 +4,54 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Custom scrollbar styles */
+@layer utilities {
+  .scrollbar-thin {
+    scrollbar-width: thin;
+  }
+  
+  .scrollbar-thumb-border {
+    scrollbar-color: hsl(var(--border)) transparent;
+  }
+  
+  .scrollbar-track-transparent {
+    scrollbar-track-color: transparent;
+  }
+  
+  /* WebKit scrollbar for Chrome/Safari */
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: hsl(var(--border));
+    border-radius: 3px;
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--border) / 0.8);
+  }
+
+  /* Line clamp utilities */
+  .line-clamp-1 {
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  
+  .line-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+}
+
 @layer base {
   :root {
     --background: 220 15% 8%;
@@ -77,28 +125,28 @@
 /* Markdown prose styles */
 @layer components {
   .prose {
-    @apply text-foreground leading-relaxed w-full;
+    @apply text-foreground leading-normal w-full;
     max-width: 90ch;
   }
 
   .prose h1 {
-    @apply text-3xl sm:text-4xl font-bold mt-8 mb-4 leading-tight;
+    @apply text-2xl sm:text-3xl font-bold mt-6 mb-2 leading-snug;
   }
 
   .prose h2 {
-    @apply text-2xl font-bold mt-8 mb-4 leading-tight;
+    @apply text-xl sm:text-2xl font-bold mt-6 mb-2 leading-snug;
   }
 
   .prose h3 {
-    @apply text-xl font-bold mt-6 mb-3 leading-tight;
+    @apply text-lg font-bold mt-4 mb-1.5 leading-snug;
   }
 
   .prose h4 {
-    @apply text-lg font-bold mt-4 mb-2;
+    @apply text-base font-bold mt-3 mb-1 leading-snug;
   }
 
   .prose p {
-    @apply mb-5 text-base leading-[1.8];
+    @apply mb-3 text-[15px] leading-[1.6];
     color: hsl(var(--foreground) / 0.9);
   }
 
@@ -113,22 +161,22 @@
   }
 
   .prose blockquote {
-    @apply border-l-4 border-primary/50 pl-4 my-5 italic;
+    @apply border-l-4 border-primary/50 pl-4 my-3 italic;
     color: hsl(var(--muted-foreground));
   }
 
   .prose ul {
-    @apply list-disc pl-6 mb-5 space-y-2;
+    @apply list-disc pl-6 mb-3 space-y-1;
     color: hsl(var(--foreground) / 0.9);
   }
 
   .prose ol {
-    @apply list-decimal pl-6 mb-5 space-y-2;
+    @apply list-decimal pl-6 mb-3 space-y-1;
     color: hsl(var(--foreground) / 0.9);
   }
 
   .prose li {
-    @apply leading-[1.7] text-base;
+    @apply leading-[1.5] text-[15px];
   }
 
   .prose code:not(pre code) {
@@ -140,7 +188,7 @@
   }
 
   .prose pre {
-    @apply rounded-md p-4 my-4 overflow-x-auto text-[13px] leading-relaxed;
+    @apply rounded-md p-3 my-3 overflow-x-auto text-[13px] leading-snug;
     background: hsl(var(--code-bg)) !important;
     border: 1px solid hsl(var(--code-border));
     font-family: var(--font-mono);
@@ -151,12 +199,35 @@
     color: hsl(var(--foreground) / 0.9);
   }
 
+  /* Code block wrapper with language label */
+  .prose .code-block-wrapper {
+    @apply relative my-3;
+  }
+
+  .prose .code-block-wrapper .code-block-lang {
+    @apply text-[10px] font-mono font-semibold uppercase tracking-wider px-3 py-1 rounded-t-md;
+    background: hsl(var(--code-bg));
+    border: 1px solid hsl(var(--code-border));
+    border-bottom: none;
+    color: hsl(var(--primary));
+    display: inline-block;
+  }
+
+  .prose .code-block-wrapper pre {
+    @apply mt-0;
+    border-top-left-radius: 0;
+  }
+
+  .prose .code-block-wrapper .code-block-lang + pre {
+    margin-top: 0 !important;
+  }
+
   .prose img {
-    @apply rounded-md my-6 w-full;
+    @apply rounded-md my-4 w-full;
   }
 
   .prose hr {
-    @apply my-6 border-border;
+    @apply my-4 border-border;
   }
 
   .prose table {
