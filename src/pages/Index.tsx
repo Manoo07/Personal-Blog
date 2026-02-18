@@ -4,6 +4,7 @@ import BlogCard from "@/components/BlogCard";
 import GitHubProjectCard from "@/components/GitHubProjectCard";
 import { usePosts } from "@/hooks/use-api";
 import { useGitHubRepos } from "@/hooks/use-github";
+import { getAssetPath } from "@/lib/assets";
 import { ArrowRight, Loader2, FileText } from "lucide-react";
 
 const Index = () => {
@@ -57,7 +58,7 @@ const Index = () => {
               {/* Image container with glassmorphism */}
               <div className="relative backdrop-blur-sm bg-card/20 p-2 rounded-2xl border border-border/50 shadow-2xl">
                 <img 
-                  src="/image.png" 
+                  src={getAssetPath("image.png")} 
                   alt="Manohar Boinapally" 
                   className="w-full h-auto rounded-xl object-contain"
                 />
