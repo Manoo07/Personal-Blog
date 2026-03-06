@@ -5,6 +5,7 @@ import rehypeHighlight from "rehype-highlight";
 import Layout from "@/components/Layout";
 import Breadcrumb from "@/components/Breadcrumb";
 import BlogSidebar from "@/components/BlogSidebar";
+import SectionNav from "@/components/SectionNav";
 import { usePost } from "@/hooks/use-api";
 import { Loader2 } from "lucide-react";
 
@@ -90,7 +91,10 @@ const BlogPost = () => {
           ]}
         />
 
-        <div className="lg:pr-52 xl:pr-56">
+        {/* Left fixed sidebar — Section navigation */}
+        <SectionNav section={post.section} />
+
+        <div className="lg:pr-52 xl:pl-60 xl:pr-56 2xl:pl-72 2xl:pr-56">
           {/* Main content */}
           <article className="max-w-3xl">
             <header className="mb-6 animate-fade-in">
@@ -134,7 +138,7 @@ const BlogPost = () => {
           </article>
         </div>
 
-        {/* Fixed Sidebar - Table of Contents */}
+        {/* Fixed Right Sidebar - Table of Contents */}
         <BlogSidebar content={post.content} />
       </div>
     </Layout>
