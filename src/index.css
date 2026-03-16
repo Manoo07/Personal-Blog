@@ -125,28 +125,28 @@
 /* Markdown prose styles */
 @layer components {
   .prose {
-    @apply text-foreground leading-normal w-full;
+    @apply text-foreground leading-relaxed w-full;
     max-width: 90ch;
   }
 
   .prose h1 {
-    @apply text-2xl sm:text-3xl font-bold mt-6 mb-2 leading-snug;
+    @apply text-2xl sm:text-3xl font-bold mt-8 mb-3 leading-snug;
   }
 
   .prose h2 {
-    @apply text-xl sm:text-2xl font-bold mt-6 mb-2 leading-snug;
+    @apply text-xl sm:text-2xl font-bold mt-8 mb-3 leading-snug;
   }
 
   .prose h3 {
-    @apply text-lg font-bold mt-4 mb-1.5 leading-snug;
+    @apply text-lg font-bold mt-6 mb-2 leading-snug;
   }
 
   .prose h4 {
-    @apply text-base font-bold mt-3 mb-1 leading-snug;
+    @apply text-base font-bold mt-4 mb-1.5 leading-snug;
   }
 
   .prose p {
-    @apply mb-3 text-[15px] leading-[1.6];
+    @apply mb-5 text-[15px] leading-[1.85];
     color: hsl(var(--foreground) / 0.9);
   }
 
@@ -161,22 +161,22 @@
   }
 
   .prose blockquote {
-    @apply border-l-4 border-primary/50 pl-4 my-3 italic;
+    @apply border-l-4 border-primary/50 pl-4 my-5 italic;
     color: hsl(var(--muted-foreground));
   }
 
   .prose ul {
-    @apply list-disc pl-6 mb-3 space-y-1;
+    @apply list-disc pl-6 mb-5 space-y-2;
     color: hsl(var(--foreground) / 0.9);
   }
 
   .prose ol {
-    @apply list-decimal pl-6 mb-3 space-y-1;
+    @apply list-decimal pl-6 mb-5 space-y-2;
     color: hsl(var(--foreground) / 0.9);
   }
 
   .prose li {
-    @apply leading-[1.5] text-[15px];
+    @apply leading-[1.75] text-[15px];
   }
 
   .prose code:not(pre code) {
@@ -188,7 +188,7 @@
   }
 
   .prose pre {
-    @apply rounded-md p-3 my-3 overflow-x-auto text-[13px] leading-snug;
+    @apply rounded-md p-4 my-5 overflow-x-auto text-[13px] leading-relaxed;
     background: hsl(var(--code-bg)) !important;
     border: 1px solid hsl(var(--code-border));
     font-family: var(--font-mono);
@@ -201,7 +201,7 @@
 
   /* Code block wrapper with language label */
   .prose .code-block-wrapper {
-    @apply relative my-3;
+    @apply relative my-5;
   }
 
   .prose .code-block-wrapper .code-block-lang {
@@ -223,16 +223,16 @@
   }
 
   .prose img {
-    @apply rounded-md my-4 w-full;
+    @apply rounded-md my-6 w-full;
   }
 
   .prose hr {
-    @apply my-4 border-border;
+    @apply my-6 border-border;
   }
 
   /* Responsive table wrapper — enables horizontal scroll on small screens */
   .prose .table-responsive-wrapper {
-    @apply w-full my-4 overflow-x-auto rounded-md;
+    @apply w-full my-5 overflow-x-auto rounded-md;
     -webkit-overflow-scrolling: touch;
     /* subtle scroll shadow hint on the right edge */
     background:
@@ -255,7 +255,7 @@
   }
 
   .prose th {
-    @apply text-left py-2 px-3 font-semibold text-sm whitespace-nowrap;
+    @apply text-left py-2.5 px-3 font-semibold text-sm whitespace-nowrap;
     color: hsl(var(--foreground));
     background: hsl(var(--secondary) / 0.5);
   }
@@ -264,7 +264,7 @@
   .prose th:last-child  { border-radius: 0 0.375rem 0 0; }
 
   .prose td {
-    @apply py-2 px-3 border-b border-border/50 text-sm;
+    @apply py-2.5 px-3 border-b border-border/50 text-sm;
     color: hsl(var(--foreground) / 0.85);
   }
 
