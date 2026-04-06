@@ -1,5 +1,21 @@
 // API Configuration
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8787";
+const PRODUCTION_API_URL = "https://journal-be.manoharboinapalli2003.workers.dev";
+
+const resolveApiBaseUrl = (): string => {
+  const envUrl = import.meta.env.VITE_API_URL?.trim();
+
+  if (envUrl) {
+    return envUrl.replace(/\/$/, "");
+  }
+
+  if (import.meta.env.DEV) {
+    return "http://localhost:8787";
+  }
+
+  return PRODUCTION_API_URL;
+};
+
+const API_BASE_URL = resolveApiBaseUrl();
 
 // Types matching the backend API
 export interface ApiPost {
