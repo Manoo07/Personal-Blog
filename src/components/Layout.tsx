@@ -1,6 +1,7 @@
 import { Link, useLocation } from "react-router-dom";
 import { ReactNode, useState } from "react";
 import { Menu, X, Github, Linkedin } from "lucide-react";
+import ThemeToggle from "@/components/ThemeToggle";
 
 interface LayoutProps {
   children: ReactNode;
@@ -57,6 +58,8 @@ const Layout = ({ children }: LayoutProps) => {
                 {link.label}
               </Link>
             ))}
+
+            <ThemeToggle />
             
             {/* Social Links */}
             <div className="flex items-center gap-3 ml-2 pl-3 border-l border-border/50">
@@ -109,7 +112,8 @@ const Layout = ({ children }: LayoutProps) => {
               
               {/* Mobile Social Links */}
               <div className="pt-2 mt-3 border-t border-border/50">
-                <div className="flex items-center gap-4">
+                <div className="flex items-center justify-between gap-4">
+                  <ThemeToggle />
                   {socialLinks.map((social) => {
                     const Icon = social.icon;
                     return (
