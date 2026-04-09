@@ -207,7 +207,7 @@ const About = () => {
                   {["Amazon Web Services (AWS)", "Docker"].map((skill) => (
                     <span
                       key={skill}
-                      className="text-xs px-3 py-1.5 rounded-full bg-accent/10 text-accent font-medium border border-accent/20"
+                      className="text-xs px-3 py-1.5 rounded-full bg-secondary/80 text-secondary-foreground font-medium"
                     >
                       {skill}
                     </span>
