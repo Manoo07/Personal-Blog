@@ -45,24 +45,23 @@ const Layout = ({ children }: LayoutProps) => {
           
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center gap-6">
-            {navLinks.map((link) => (
-              <Link
-                key={link.to}
-                to={link.to}
-                className={`text-sm transition-colors ${
-                  location.pathname === link.to || (link.to !== "/" && location.pathname.startsWith(link.to))
-                    ? "text-primary font-medium"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                {link.label}
-              </Link>
-            ))}
+            <div className="flex items-center gap-6">
+              {navLinks.map((link) => (
+                <Link
+                  key={link.to}
+                  to={link.to}
+                  className={`text-sm transition-colors ${
+                    location.pathname === link.to || (link.to !== "/" && location.pathname.startsWith(link.to))
+                      ? "text-primary font-medium"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {link.label}
+                </Link>
+              ))}
+            </div>
 
-            <ThemeToggle />
-            
-            {/* Social Links */}
-            <div className="flex items-center gap-3 ml-2 pl-3 border-l border-border/50">
+            <div className="flex items-center gap-3 pl-3 border-l border-border/50">
               {socialLinks.map((social) => {
                 const Icon = social.icon;
                 return (
@@ -78,6 +77,7 @@ const Layout = ({ children }: LayoutProps) => {
                   </a>
                 );
               })}
+              <ThemeToggle compact />
             </div>
           </div>
 
@@ -113,7 +113,6 @@ const Layout = ({ children }: LayoutProps) => {
               {/* Mobile Social Links */}
               <div className="pt-2 mt-3 border-t border-border/50">
                 <div className="flex items-center justify-between gap-4">
-                  <ThemeToggle />
                   {socialLinks.map((social) => {
                     const Icon = social.icon;
                     return (
@@ -130,6 +129,7 @@ const Layout = ({ children }: LayoutProps) => {
                       </a>
                     );
                   })}
+                  <ThemeToggle compact={false} />
                 </div>
               </div>
             </div>
