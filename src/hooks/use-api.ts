@@ -1,9 +1,10 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient, useMemo } from "@tanstack/react-query";
 import {
   api,
   ApiPost,
   ApiSection,
   ApiSectionNode,
+  ApiPostSummary,
   SectionTreeResponse,
   SectionDetailResponse,
   SectionPostsResponse,
@@ -335,4 +336,37 @@ export function useReorderSections() {
       queryClient.invalidateQueries({ queryKey: queryKeys.sections });
     },
   });
+}
+
+/** Returns the previous and next post within the same section, ordered by `order`. */
+export function useAdjacentPosts(
+  currentSlug: string,
+  sectionId: string | null | undefined
+): { prev: ApiPostSummary | null; next: ApiPostSummary | null } {
+  const { data: sectionData } = useSectionTree();
+
+  return useMemo(() => {
+    if (!sectionId || !sectionData) return { prev: null, next: null };
+
+    const findNode = (nodes: ApiSectionNode[]): ApiSectionNode | null => {
+      for (const node of nodes) {
+        if (node.id === sectionId) return node;
+        const found = findNode(node.children ?? []);
+        if (found) return found;
+      }
+      return null;
+    };
+
+    const node = findNode(sectionData.sections);
+    if (!node?.posts?.length) return { prev: null, next: null };
+
+    const sorted = [...node.posts].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+    const idx = sorted.findIndex((p) => p.slug === currentSlug);
+    if (idx === -1) return { prev: null, next: null };
+
+    return {
+      prev: idx > 0 ? sorted[idx - 1] : null,
+      next: idx < sorted.length - 1 ? sorted[idx + 1] : null,
+    };
+  }, [sectionData, currentSlug, sectionId]);
 }

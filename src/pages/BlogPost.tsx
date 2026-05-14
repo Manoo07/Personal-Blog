@@ -6,8 +6,8 @@ import Layout from "@/components/Layout";
 import Breadcrumb from "@/components/Breadcrumb";
 import BlogSidebar from "@/components/BlogSidebar";
 import SectionNav from "@/components/SectionNav";
-import { usePost } from "@/hooks/use-api";
-import { Loader2 } from "lucide-react";
+import { usePost, useAdjacentPosts } from "@/hooks/use-api";
+import { Loader2, ChevronLeft, ChevronRight } from "lucide-react";
 
 /** Custom renderers for ReactMarkdown */
 const markdownComponents: Components = {
@@ -51,6 +51,7 @@ const markdownComponents: Components = {
 const BlogPost = () => {
   const { slug } = useParams<{ slug: string }>();
   const { data: post, isLoading, isError } = usePost(slug || "");
+  const { prev, next } = useAdjacentPosts(slug || "", post?.sectionId);
 
   if (isLoading) {
     return (
@@ -135,6 +136,45 @@ const BlogPost = () => {
                 {post.content}
               </ReactMarkdown>
             </div>
+
+            {/* Prev / Next navigation */}
+            {(prev || next) && (
+              <nav className="mt-12 pt-6 border-t border-border/40 flex gap-3 not-prose">
+                {prev ? (
+                  <Link
+                    to={`/blog/${prev.slug}`}
+                    className="group flex-1 flex flex-col gap-1 p-4 rounded-lg border border-border/40 hover:border-primary/40 hover:bg-primary/5 transition-all duration-200 min-w-0"
+                  >
+                    <span className="text-[11px] text-muted-foreground flex items-center gap-0.5">
+                      <ChevronLeft className="w-3 h-3 shrink-0" />
+                      Previous
+                    </span>
+                    <span className="text-sm font-medium text-foreground line-clamp-2 leading-snug group-hover:text-primary transition-colors">
+                      {prev.title}
+                    </span>
+                  </Link>
+                ) : (
+                  <div className="flex-1" />
+                )}
+
+                {next ? (
+                  <Link
+                    to={`/blog/${next.slug}`}
+                    className="group flex-1 flex flex-col gap-1 p-4 rounded-lg border border-border/40 hover:border-primary/40 hover:bg-primary/5 transition-all duration-200 text-right min-w-0"
+                  >
+                    <span className="text-[11px] text-muted-foreground flex items-center gap-0.5 justify-end">
+                      Next
+                      <ChevronRight className="w-3 h-3 shrink-0" />
+                    </span>
+                    <span className="text-sm font-medium text-foreground line-clamp-2 leading-snug group-hover:text-primary transition-colors">
+                      {next.title}
+                    </span>
+                  </Link>
+                ) : (
+                  <div className="flex-1" />
+                )}
+              </nav>
+            )}
           </article>
         </div>
 
