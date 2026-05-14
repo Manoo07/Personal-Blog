@@ -12,6 +12,11 @@ import {
   PanelLeftOpen,
   X,
 } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import type { ApiSectionNode, SectionSummary } from "@/lib/api";
 
 interface SectionNavProps {
@@ -103,14 +108,21 @@ const SectionNodeItem = ({
             />
           )}
         </span>
-        <span
-          className={cn(
-            "leading-snug line-clamp-1",
-            isAncestorOfActive && depth === 0 && "text-primary"
-          )}
-        >
-          {node.name}
-        </span>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span
+              className={cn(
+                "leading-snug line-clamp-1",
+                isAncestorOfActive && depth === 0 && "text-primary"
+              )}
+            >
+              {node.name}
+            </span>
+          </TooltipTrigger>
+          <TooltipContent side="right" className="max-w-[200px] text-xs">
+            {node.name}
+          </TooltipContent>
+        </Tooltip>
       </button>
 
       {/* Expanded content */}
@@ -141,9 +153,16 @@ const SectionNodeItem = ({
                       ) : (
                         <FileText className="w-3 h-3 shrink-0 mt-0.5 opacity-50" />
                       )}
-                      <span className="line-clamp-2 leading-snug">
-                        {post.title}
-                      </span>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="line-clamp-2 leading-snug">
+                            {post.title}
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent side="right" className="max-w-[200px] text-xs">
+                          {post.title}
+                        </TooltipContent>
+                      </Tooltip>
                     </Link>
                   </li>
                 );
