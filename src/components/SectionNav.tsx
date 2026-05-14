@@ -36,9 +36,6 @@ function sortSections(nodes: ApiSectionNode[]): ApiSectionNode[] {
 
 // ── Recursive section node renderer ──────────────────────────────────────
 
-const INDENT = 8;  // px per nesting level — same rhythm as VS Code
-const BASE_PAD = 4; // px left padding for depth-0 items (VS Code has ~4px)
-
 interface SectionNodeProps {
   node: ApiSectionNode;
   depth: number;
@@ -52,107 +49,122 @@ const SectionNodeItem = ({
   currentSlug,
   activeSectionId,
 }: SectionNodeProps) => {
+  // Auto-expand if the active post lives anywhere inside this subtree
   const allIds = useMemo(() => collectIds(node), [node]);
-  const isAncestorOfActive = activeSectionId ? allIds.includes(activeSectionId) : false;
+  const isAncestorOfActive = activeSectionId
+    ? allIds.includes(activeSectionId)
+    : false;
+
   const [open, setOpen] = useState(isAncestorOfActive);
 
+  // Use posts already ordered from the tree API (order ASC, updatedAt DESC)
   const directPosts = node.posts ?? [];
   const hasChildren = (node.children?.length ?? 0) > 0;
   const hasContent = directPosts.length > 0 || hasChildren;
 
   if (!hasContent) return null;
 
-  // Left offset: items own their own padding, no outer container padding
-  const rowPadLeft = BASE_PAD + depth * INDENT;
-  // Guide line x = center of the chevron icon at this depth
-  const guideX = rowPadLeft + 6; // 6 ≈ half of w-3 icon
-
   return (
     <li>
-      {/* Section row */}
+      {/* Section heading — toggles open/close */}
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
         className={cn(
-          "w-full flex items-center gap-[3px] py-1.5 pr-1 rounded-[2px] text-left",
-          "transition-colors duration-100",
-          "hover:bg-secondary/50",
-          isAncestorOfActive
-            ? "text-foreground"
-            : "text-muted-foreground hover:text-foreground"
+          "w-full flex items-center gap-1.5 py-1.5 rounded transition-all duration-200 text-left",
+          "hover:text-foreground",
+          depth === 0
+            ? "text-xs font-medium text-foreground"
+            : "text-[11px] text-muted-foreground"
         )}
-        style={{ paddingLeft: `${rowPadLeft}px` }}
+        style={{ paddingLeft: `${depth * 10}px` }}
       >
-        {/* Chevron — fixed 12px slot */}
-        <span className="shrink-0 w-3 h-3 flex items-center justify-center opacity-60">
-          {open
-            ? <ChevronDown className="w-3 h-3" />
-            : <ChevronRight className="w-3 h-3" />}
+        <span className="shrink-0 text-muted-foreground">
+          {open ? (
+            <ChevronDown className="w-3.5 h-3.5" />
+          ) : (
+            <ChevronRight className="w-3.5 h-3.5" />
+          )}
         </span>
-
-        {/* Folder icon */}
-        {open
-          ? <FolderOpen className={cn("shrink-0 w-3 h-3", isAncestorOfActive ? "text-primary" : "")} />
-          : <Folder    className={cn("shrink-0 w-3 h-3", isAncestorOfActive ? "text-primary" : "")} />}
-
-        {/* Label */}
-        <span className={cn(
-          "text-xs leading-none truncate",
-          depth === 0 ? "font-medium" : "font-normal",
-          isAncestorOfActive && "text-foreground"
-        )}>
+        <span className="shrink-0">
+          {open ? (
+            <FolderOpen
+              className={cn(
+                "w-3.5 h-3.5",
+                isAncestorOfActive ? "text-primary" : "text-muted-foreground"
+              )}
+            />
+          ) : (
+            <Folder
+              className={cn(
+                "w-3.5 h-3.5",
+                isAncestorOfActive ? "text-primary" : "text-muted-foreground"
+              )}
+            />
+          )}
+        </span>
+        <span
+          className={cn(
+            "leading-snug line-clamp-1",
+            isAncestorOfActive && depth === 0 && "text-primary"
+          )}
+        >
           {node.name}
         </span>
       </button>
 
-      {/* Expanded content with VS Code-style guide line */}
+      {/* Expanded content */}
       {open && (
-        <div className="relative">
-          {/* Vertical guide line — anchored at the chevron centre */}
-          <div
-            className="absolute top-0 bottom-0 w-px bg-border/30"
-            style={{ left: `${guideX}px` }}
-          />
+        <div
+          className="border-l border-border/30 ml-[7px]"
+          style={{ marginLeft: `${depth * 10 + 7}px` }}
+        >
+          {/* Direct posts */}
+          {directPosts.length > 0 && (
+            <ul className="space-y-0.5 pl-2">
+              {directPosts.map((post) => {
+                const isActive = post.slug === currentSlug;
+                return (
+                  <li key={post.slug}>
+                    <Link
+                      to={`/blog/${post.slug}`}
+                      className={cn(
+                        "flex items-start gap-1 py-1 px-1.5 rounded transition-all duration-200 text-[11px]",
+                        "hover:text-primary",
+                        isActive
+                          ? "text-primary font-medium bg-primary/10"
+                          : "text-muted-foreground"
+                      )}
+                    >
+                      {isActive ? (
+                        <ChevronRight className="w-3 h-3 shrink-0 mt-0.5" />
+                      ) : (
+                        <FileText className="w-3 h-3 shrink-0 mt-0.5 opacity-50" />
+                      )}
+                      <span className="line-clamp-2 leading-snug">
+                        {post.title}
+                      </span>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
 
-          <div style={{ paddingLeft: `${guideX + 6}px` }}>
-            {/* Direct posts */}
-            {directPosts.map((post) => {
-              const isActive = post.slug === currentSlug;
-              return (
-                <Link
-                  key={post.slug}
-                  to={`/blog/${post.slug}`}
-                  className={cn(
-                    "flex items-center gap-[3px] py-1 pr-1 pl-0 rounded-[2px]",
-                    "text-xs leading-none transition-colors duration-100",
-                    isActive
-                      ? "text-primary font-medium bg-primary/8"
-                      : "text-muted-foreground hover:bg-secondary/50 hover:text-foreground"
-                  )}
-                >
-                  {isActive
-                    ? <ChevronRight className="shrink-0 w-3 h-3 opacity-80" />
-                    : <FileText    className="shrink-0 w-3 h-3 opacity-40" />}
-                  <span className="truncate">{post.title}</span>
-                </Link>
-              );
-            })}
-
-            {/* Child sections */}
-            {hasChildren && (
-              <ul className="space-y-0">
-                {sortSections(node.children!).map((child) => (
-                  <SectionNodeItem
-                    key={child.id}
-                    node={child}
-                    depth={depth + 1}
-                    currentSlug={currentSlug}
-                    activeSectionId={activeSectionId}
-                  />
-                ))}
-              </ul>
-            )}
-          </div>
+          {/* Child sections — sorted by order, then numeric name prefix */}
+          {hasChildren && (
+            <ul className="space-y-0">
+              {sortSections(node.children!).map((child) => (
+                <SectionNodeItem
+                  key={child.id}
+                  node={child}
+                  depth={depth + 1}
+                  currentSlug={currentSlug}
+                  activeSectionId={activeSectionId}
+                />
+              ))}
+            </ul>
+          )}
         </div>
       )}
     </li>
@@ -193,13 +205,13 @@ const SectionNav = ({ section }: SectionNavProps) => {
   // ── Shared tree content ────────────────────────────────────────────────
   const treeContent = (
     <>
-      <div className="max-h-[calc(100vh-160px)] overflow-y-auto scroll-smooth pb-2 scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent">
+      <div className="max-h-[calc(100vh-160px)] overflow-y-auto scroll-smooth px-2 pb-3 scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent">
         {isLoading ? (
           <div className="py-4 flex items-center justify-center">
             <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />
           </div>
         ) : (
-          <ul className="space-y-0">
+          <ul className="space-y-0.5">
             {sections.map((topNode) => (
               <SectionNodeItem
                 key={topNode.id}
@@ -240,8 +252,8 @@ const SectionNav = ({ section }: SectionNavProps) => {
 
           {/* Drawer panel */}
           <nav className="absolute top-0 left-0 h-full w-[260px] max-w-[80vw] bg-background border-r border-border/50 shadow-xl animate-in slide-in-from-left duration-200 flex flex-col">
-            <div className="flex items-center justify-between px-2 pt-2 pb-1.5">
-              <h4 className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+            <div className="flex items-center justify-between px-3 pt-3 pb-2">
+              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                 Sections
               </h4>
               <button
@@ -254,13 +266,13 @@ const SectionNav = ({ section }: SectionNavProps) => {
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto scroll-smooth pb-3 scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent">
+            <div className="flex-1 overflow-y-auto scroll-smooth px-2 pb-4 scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent">
               {isLoading ? (
                 <div className="py-4 flex items-center justify-center">
                   <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />
                 </div>
               ) : (
-                <ul className="space-y-0">
+                <ul className="space-y-0.5">
                   {sections.map((topNode) => (
                     <SectionNodeItem
                       key={topNode.id}
@@ -281,7 +293,7 @@ const SectionNav = ({ section }: SectionNavProps) => {
       <aside className="hidden xl:block">
         <nav className="fixed top-24 left-3 xl:left-4 2xl:left-8 w-56 2xl:w-64">
           <div className="rounded-lg border border-border/40 bg-card/50 backdrop-blur-sm">
-            <div className="pt-2 pb-1.5" style={{ paddingLeft: `${BASE_PAD + 2}px`, paddingRight: `${BASE_PAD}px` }}>
+            <div className="px-3 pt-3 pb-2">
               <h4 className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
                 Sections
               </h4>
