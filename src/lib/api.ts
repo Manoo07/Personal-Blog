@@ -16,6 +16,7 @@ const resolveApiBaseUrl = (): string => {
 };
 
 const API_BASE_URL = resolveApiBaseUrl();
+const IMAGE_UPLOAD_ENDPOINT = import.meta.env.VITE_IMAGE_UPLOAD_ENDPOINT?.trim() || "/api/admin/uploads/image";
 
 // Types matching the backend API
 export interface ApiPost {
@@ -28,6 +29,7 @@ export interface ApiPost {
   coverImage: string | null;
   status: "DRAFT" | "PUBLISHED";
   readingTime: number;
+  order: number;
   sectionId: string | null;
   section?: SectionSummary | null;
   createdAt: string;
@@ -42,6 +44,7 @@ export interface ApiPostSummary {
   tags: string[];
   coverImage: string | null;
   readingTime: number;
+  order: number;
   /** sectionId is not returned by list endpoints — use section?.id instead */
   sectionId?: string | null;
   section?: SectionSummary | null;
@@ -85,6 +88,7 @@ export interface CreatePostRequest {
   coverImage?: string | null;
   status?: "DRAFT" | "PUBLISHED";
   sectionId?: string | null;
+  order?: number;
 }
 
 export interface UpdatePostRequest {
@@ -96,6 +100,11 @@ export interface UpdatePostRequest {
   coverImage?: string | null;
   status?: "DRAFT" | "PUBLISHED";
   sectionId?: string | null;
+  order?: number;
+}
+
+export interface ReorderPostsRequest {
+  posts: { id: string; order: number }[];
 }
 
 // ============================================
@@ -129,6 +138,7 @@ export interface ApiSection {
 /** Section with recursively nested children (used in the tree) */
 export interface ApiSectionNode extends ApiSection {
   children: ApiSectionNode[];
+  posts?: ApiPostSummary[];
 }
 
 /** Breadcrumb item returned by GET /api/sections/{slug} */
@@ -184,10 +194,18 @@ export interface MovePostsRequest {
   sectionId: string | null;
 }
 
+export interface ReorderSectionsRequest {
+  sections: { id: string; order: number }[];
+}
+
 export interface ApiError {
   error: string;
   code?: string;
   details?: Record<string, string> | Array<{ field: string; message: string }>;
+}
+
+export interface UploadImageResponse {
+  url: string;
 }
 
 // Token management
@@ -241,6 +259,36 @@ class ApiClient {
     if (!response.ok) {
       const errorData: ApiError = await response.json().catch(() => ({
         error: "An unexpected error occurred",
+      }));
+      throw new ApiClientError(
+        errorData.error,
+        response.status,
+        errorData.code,
+        errorData.details
+      );
+    }
+
+    return response.json();
+  }
+
+  private async uploadRequest<T>(endpoint: string, formData: FormData): Promise<T> {
+    const url = `${this.baseUrl}${endpoint}`;
+    const token = getToken();
+
+    const headers: HeadersInit = {};
+    if (token) {
+      (headers as Record<string, string>)["Authorization"] = `Bearer ${token}`;
+    }
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers,
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const errorData: ApiError = await response.json().catch(() => ({
+        error: "Image upload failed",
       }));
       throw new ApiClientError(
         errorData.error,
@@ -370,6 +418,17 @@ class ApiClient {
     });
   }
 
+  async getNextPostOrder(): Promise<{ nextOrder: number }> {
+    return this.request("/api/admin/posts/next-order");
+  }
+
+  async reorderPosts(data: ReorderPostsRequest): Promise<{ updated: number }> {
+    return this.request("/api/admin/posts/reorder", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
   // ============================================
   // Sections  (routes per OpenAPI spec)
   // ============================================
@@ -434,6 +493,39 @@ class ApiClient {
       method: "POST",
       body: JSON.stringify(data),
     });
+  }
+
+  /** PUT /api/sections/reorder — auth required */
+  async reorderSections(data: ReorderSectionsRequest): Promise<{ updated: number }> {
+    return this.request("/api/sections/reorder", {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async uploadImage(file: File): Promise<UploadImageResponse> {
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const response = await this.uploadRequest<Record<string, unknown>>(IMAGE_UPLOAD_ENDPOINT, formData);
+    const url =
+      (typeof response.url === "string" && response.url) ||
+      (typeof response.imageUrl === "string" && response.imageUrl) ||
+      (typeof response.location === "string" && response.location) ||
+      (typeof response.secure_url === "string" && response.secure_url) ||
+      (typeof response.data === "object" && response.data !== null && typeof (response.data as Record<string, unknown>).url === "string"
+        ? ((response.data as Record<string, unknown>).url as string)
+        : "");
+
+    if (!url) {
+      throw new ApiClientError(
+        "Upload succeeded but no image URL was returned",
+        500,
+        "UPLOAD_URL_MISSING"
+      );
+    }
+
+    return { url };
   }
 }
 

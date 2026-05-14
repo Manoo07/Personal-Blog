@@ -12,12 +12,15 @@ import {
   CreateSectionRequest,
   UpdateSectionRequest,
   MovePostsRequest,
+  ReorderPostsRequest,
+  ReorderSectionsRequest,
   PostListResponse,
   TagResponse,
   CreatePostRequest,
   UpdatePostRequest,
   LoginRequest,
   LoginResponse,
+  UploadImageResponse,
   ApiClientError,
 } from "@/lib/api";
 
@@ -189,6 +192,23 @@ export function useUnpublishPost() {
   });
 }
 
+export function useUploadImage() {
+  return useMutation<UploadImageResponse, ApiClientError, File>({
+    mutationFn: (file) => api.uploadImage(file),
+  });
+}
+
+export function useReorderPosts() {
+  const queryClient = useQueryClient();
+  return useMutation<{ updated: number }, ApiClientError, ReorderPostsRequest>({
+    mutationFn: (data) => api.reorderPosts(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.adminPosts });
+      queryClient.invalidateQueries({ queryKey: queryKeys.posts });
+    },
+  });
+}
+
 // ============================================
 // Authentication Hooks
 // ============================================
@@ -302,6 +322,16 @@ export function useMovePosts() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.adminPosts });
       queryClient.invalidateQueries({ queryKey: queryKeys.posts });
+      queryClient.invalidateQueries({ queryKey: queryKeys.sections });
+    },
+  });
+}
+
+export function useReorderSections() {
+  const queryClient = useQueryClient();
+  return useMutation<{ updated: number }, ApiClientError, ReorderSectionsRequest>({
+    mutationFn: (data) => api.reorderSections(data),
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.sections });
     },
   });

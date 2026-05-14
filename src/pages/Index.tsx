@@ -8,7 +8,7 @@ import { getAssetPath } from "@/lib/assets";
 import { ArrowRight, Loader2, FileText } from "lucide-react";
 
 const Index = () => {
-  const { data: postsData, isLoading: postsLoading } = usePosts({ limit: 5, sort: "createdAt", order: "desc" });
+  const { data: postsData, isLoading: postsLoading } = usePosts({ limit: 5, sort: "order", order: "asc" });
   const { data: githubProjects } = useGitHubRepos(4);
   const recentPosts = postsData?.posts || [];
   const featuredProjects = githubProjects?.slice(0, 2) || [];

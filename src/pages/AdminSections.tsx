@@ -8,6 +8,7 @@ import {
   Trash2,
   ChevronRight,
   ChevronDown,
+  ChevronUp,
   FolderOpen,
   Folder,
   Loader2,
@@ -19,6 +20,7 @@ import {
   Search,
   Link2,
   Link2Off,
+  GripVertical,
 } from "lucide-react";
 import {
   useVerifyToken,
@@ -27,6 +29,7 @@ import {
   useCreateSection,
   useUpdateSection,
   useDeleteSection,
+  useReorderSections,
   useAdminPosts,
   useUpdatePost,
 } from "@/hooks/use-api";
@@ -294,6 +297,13 @@ interface SectionRowProps {
   onDelete: (id: string, name: string) => void;
   isPendingEdit: boolean;
   isPendingChild: boolean;
+  // Reordering
+  isFirst: boolean;
+  isLast: boolean;
+  siblings: ApiSectionNode[];
+  onMoveSection: (id: string, direction: "up" | "down", siblings: ApiSectionNode[]) => void;
+  onReorder: (updates: { id: string; order: number }[]) => Promise<void>;
+  isReordering: boolean;
   // Post assignment
   allPosts: ApiPostSummary[];
   assigningPostsOf: string | null;
@@ -318,6 +328,12 @@ const SectionRow = ({
   onDelete,
   isPendingEdit,
   isPendingChild,
+  isFirst,
+  isLast,
+  siblings,
+  onMoveSection,
+  onReorder,
+  isReordering,
   allPosts,
   assigningPostsOf,
   onStartAssignPosts,
@@ -337,6 +353,11 @@ const SectionRow = ({
         className="group flex items-center gap-1.5 py-1.5 rounded-md hover:bg-secondary/60 transition-colors"
         style={{ paddingLeft: `${8 + depth * 20}px`, paddingRight: "8px" }}
       >
+        {/* drag handle */}
+        <span className="shrink-0 text-muted-foreground/40 cursor-grab opacity-0 group-hover:opacity-100 transition-opacity">
+          <GripVertical className="w-3.5 h-3.5" />
+        </span>
+
         {/* expand toggle */}
         <button
           type="button"
@@ -383,6 +404,24 @@ const SectionRow = ({
                   {assignedCount}
                 </span>
               )}
+              <button
+                type="button"
+                onClick={() => onMoveSection(node.id, "up", siblings)}
+                disabled={isFirst || isReordering}
+                className="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors disabled:opacity-30"
+                title="Move up"
+              >
+                <ChevronUp className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => onMoveSection(node.id, "down", siblings)}
+                disabled={isLast || isReordering}
+                className="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors disabled:opacity-30"
+                title="Move down"
+              >
+                <ChevronDown className="w-3.5 h-3.5" />
+              </button>
               <button
                 type="button"
                 onClick={() => onStartAssignPosts(node.id)}
@@ -438,31 +477,31 @@ const SectionRow = ({
       {/* Children */}
       {isExpanded && (
         <div>
-          {(node.children ?? []).map((child) => (
-            <SectionRow
-              key={child.id}
-              node={child}
-              depth={depth + 1}
-              expanded={expanded}
-              onToggle={onToggle}
-              editingId={editingId}
-              addingChildOf={addingChildOf}
-              onStartEdit={onStartEdit}
-              onStartAddChild={onStartAddChild}
-              onSaveEdit={onSaveEdit}
-              onSaveChild={onSaveChild}
-              onCancelEdit={onCancelEdit}
-              onDelete={onDelete}
-              isPendingEdit={isPendingEdit}
-              isPendingChild={isPendingChild}
-              allPosts={allPosts}
-              assigningPostsOf={assigningPostsOf}
-              onStartAssignPosts={onStartAssignPosts}
-              onAssignPost={onAssignPost}
-              onUnassignPost={onUnassignPost}
-              isPendingAssign={isPendingAssign}
-            />
-          ))}
+          <DraggableSectionList
+            nodes={node.children ?? []}
+            depth={depth + 1}
+            onReorder={onReorder}
+            isReordering={isReordering}
+            expanded={expanded}
+            onToggle={onToggle}
+            editingId={editingId}
+            addingChildOf={addingChildOf}
+            onStartEdit={onStartEdit}
+            onStartAddChild={onStartAddChild}
+            onSaveEdit={onSaveEdit}
+            onSaveChild={onSaveChild}
+            onCancelEdit={onCancelEdit}
+            onDelete={onDelete}
+            isPendingEdit={isPendingEdit}
+            isPendingChild={isPendingChild}
+            onMoveSection={onMoveSection}
+            allPosts={allPosts}
+            assigningPostsOf={assigningPostsOf}
+            onStartAssignPosts={onStartAssignPosts}
+            onAssignPost={onAssignPost}
+            onUnassignPost={onUnassignPost}
+            isPendingAssign={isPendingAssign}
+          />
 
           {addingChildOf === node.id && (
             <div
@@ -480,6 +519,147 @@ const SectionRow = ({
         </div>
       )}
     </div>
+  );
+};
+
+// ── Draggable sibling list ────────────────────────────────────────────────
+
+interface DraggableSectionListProps {
+  nodes: ApiSectionNode[];
+  depth: number;
+  onReorder: (updates: { id: string; order: number }[]) => Promise<void>;
+  isReordering: boolean;
+  expanded: Set<string>;
+  onToggle: (id: string) => void;
+  editingId: string | null;
+  addingChildOf: string | null;
+  onStartEdit: (id: string) => void;
+  onStartAddChild: (id: string) => void;
+  onSaveEdit: (id: string, name: string) => void;
+  onSaveChild: (parentId: string, name: string) => void;
+  onCancelEdit: () => void;
+  onDelete: (id: string, name: string) => void;
+  isPendingEdit: boolean;
+  isPendingChild: boolean;
+  onMoveSection: (id: string, direction: "up" | "down", siblings: ApiSectionNode[]) => void;
+  allPosts: ApiPostSummary[];
+  assigningPostsOf: string | null;
+  onStartAssignPosts: (id: string) => void;
+  onAssignPost: (postId: string, sectionId: string) => Promise<void>;
+  onUnassignPost: (postId: string) => Promise<void>;
+  isPendingAssign: boolean;
+}
+
+const DraggableSectionList = ({
+  nodes,
+  depth,
+  onReorder,
+  isReordering,
+  ...rowProps
+}: DraggableSectionListProps) => {
+  const [orderedNodes, setOrderedNodes] = useState<ApiSectionNode[]>(() =>
+    [...nodes].sort((a, b) => a.order - b.order)
+  );
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
+  const [revertError, setRevertError] = useState<string | null>(null);
+  const dragIdxRef = useRef<number | null>(null);
+
+  // Sync with server data whenever nodes change (but not mid-drag)
+  useEffect(() => {
+    if (draggingId === null) {
+      setOrderedNodes([...nodes].sort((a, b) => a.order - b.order));
+    }
+  }, [nodes, draggingId]);
+
+  const handleDragStart = (e: React.DragEvent, id: string, idx: number) => {
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", id);
+    dragIdxRef.current = idx;
+    setRevertError(null);
+    setTimeout(() => setDraggingId(id), 0);
+  };
+
+  const handleDragOver = (e: React.DragEvent, idx: number) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    if (dragIdxRef.current !== null && dragIdxRef.current !== idx) {
+      setDragOverIdx(idx);
+    }
+  };
+
+  const handleDrop = async (e: React.DragEvent, dropIdx: number) => {
+    e.preventDefault();
+    const fromIdx = dragIdxRef.current;
+    setDraggingId(null);
+    setDragOverIdx(null);
+    dragIdxRef.current = null;
+    if (fromIdx === null || fromIdx === dropIdx) return;
+
+    // Optimistic update — reorder immediately in the UI
+    const previous = [...orderedNodes];
+    const reordered = [...orderedNodes];
+    const [moved] = reordered.splice(fromIdx, 1);
+    reordered.splice(dropIdx, 0, moved);
+    setOrderedNodes(reordered);
+
+    try {
+      await onReorder(reordered.map((s, i) => ({ id: s.id, order: i })));
+    } catch {
+      // Revert to previous order and surface the error
+      setOrderedNodes(previous);
+      setRevertError("Reorder failed — changes reverted.");
+    }
+  };
+
+  const handleDragEnd = () => {
+    setDraggingId(null);
+    setDragOverIdx(null);
+    dragIdxRef.current = null;
+  };
+
+  return (
+    <>
+      {revertError && (
+        <div className="mx-2 my-1 px-3 py-1.5 rounded-md bg-destructive/10 border border-destructive/20 text-destructive text-xs flex items-center justify-between gap-2">
+          <span>{revertError}</span>
+          <button
+            type="button"
+            onClick={() => setRevertError(null)}
+            className="shrink-0 hover:opacity-70 transition-opacity"
+          >
+            <X className="w-3 h-3" />
+          </button>
+        </div>
+      )}
+      {orderedNodes.map((node, i) => (
+        <div
+          key={node.id}
+          draggable={!isReordering}
+          onDragStart={(e) => handleDragStart(e, node.id, i)}
+          onDragOver={(e) => handleDragOver(e, i)}
+          onDrop={(e) => handleDrop(e, i)}
+          onDragEnd={handleDragEnd}
+          className={[
+            draggingId === node.id ? "opacity-40" : "",
+            dragOverIdx === i && draggingId !== node.id
+              ? "border-t-2 border-primary"
+              : "border-t-2 border-transparent",
+          ].join(" ")}
+        >
+          <SectionRow
+            node={node}
+            depth={depth}
+            isFirst={i === 0}
+            isLast={i === orderedNodes.length - 1}
+            siblings={orderedNodes}
+            onReorder={onReorder}
+            isReordering={isReordering}
+            {...rowProps}
+          />
+        </div>
+      ))}
+    </>
   );
 };
 
@@ -503,6 +683,7 @@ const AdminSections = () => {
   const createMutation = useCreateSection();
   const updateMutation = useUpdateSection();
   const deleteMutation = useDeleteSection();
+  const reorderMutation = useReorderSections();
   const updatePostMutation = useUpdatePost();
 
   const sections = sectionData?.sections ?? [];
@@ -569,6 +750,24 @@ const AdminSections = () => {
   const handleSaveRoot = async (name: string) => {
     await createMutation.mutateAsync({ name, slug: slugify(name), parentId: null });
     setAddingRoot(false);
+  };
+
+  const handleReorderSections = async (updates: { id: string; order: number }[]) => {
+    await reorderMutation.mutateAsync({ sections: updates });
+  };
+
+  const handleMoveSection = async (id: string, direction: "up" | "down", siblings: ApiSectionNode[]) => {
+    const sorted = [...siblings].sort((a, b) => a.order - b.order);
+    const idx = sorted.findIndex((s) => s.id === id);
+    if (idx === -1) return;
+    if (direction === "up" && idx === 0) return;
+    if (direction === "down" && idx === sorted.length - 1) return;
+
+    const swapIdx = direction === "up" ? idx - 1 : idx + 1;
+    const reordered = [...sorted];
+    [reordered[idx], reordered[swapIdx]] = [reordered[swapIdx], reordered[idx]];
+
+    await handleReorderSections(reordered.map((s, i) => ({ id: s.id, order: i })));
   };
 
   const handleDelete = async (id: string, name: string) => {
@@ -675,31 +874,31 @@ const AdminSections = () => {
                 </p>
               </div>
             ) : (
-              sections.map((node) => (
-                <SectionRow
-                  key={node.id}
-                  node={node}
-                  depth={0}
-                  expanded={expanded}
-                  onToggle={handleToggle}
-                  editingId={editingId}
-                  addingChildOf={addingChildOf}
-                  onStartEdit={handleStartEdit}
-                  onStartAddChild={handleStartAddChild}
-                  onSaveEdit={handleSaveEdit}
-                  onSaveChild={handleSaveChild}
-                  onCancelEdit={handleCancelEdit}
-                  onDelete={handleDelete}
-                  isPendingEdit={updateMutation.isPending}
-                  isPendingChild={createMutation.isPending}
-                  allPosts={allPosts}
-                  assigningPostsOf={assigningPostsOf}
-                  onStartAssignPosts={handleStartAssignPosts}
-                  onAssignPost={handleAssignPost}
-                  onUnassignPost={handleUnassignPost}
-                  isPendingAssign={updatePostMutation.isPending}
-                />
-              ))
+              <DraggableSectionList
+                nodes={sections}
+                depth={0}
+                onReorder={handleReorderSections}
+                isReordering={reorderMutation.isPending}
+                expanded={expanded}
+                onToggle={handleToggle}
+                editingId={editingId}
+                addingChildOf={addingChildOf}
+                onStartEdit={handleStartEdit}
+                onStartAddChild={handleStartAddChild}
+                onSaveEdit={handleSaveEdit}
+                onSaveChild={handleSaveChild}
+                onCancelEdit={handleCancelEdit}
+                onDelete={handleDelete}
+                isPendingEdit={updateMutation.isPending}
+                isPendingChild={createMutation.isPending}
+                onMoveSection={handleMoveSection}
+                allPosts={allPosts}
+                assigningPostsOf={assigningPostsOf}
+                onStartAssignPosts={handleStartAssignPosts}
+                onAssignPost={handleAssignPost}
+                onUnassignPost={handleUnassignPost}
+                isPendingAssign={updatePostMutation.isPending}
+              />
             )}
           </div>
         )}

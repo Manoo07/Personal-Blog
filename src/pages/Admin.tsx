@@ -1,10 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import Layout from "@/components/Layout";
 import Breadcrumb from "@/components/Breadcrumb";
 import TagInput from "@/components/TagInput";
 import SectionTreeDropdown from "@/components/SectionTreeDropdown";
-import { Pencil, Trash2, Plus, Save, Eye, Code, LogOut, Loader2, Globe, FileText, FolderTree } from "lucide-react";
+import { Pencil, Trash2, Plus, Save, Eye, Code, LogOut, Loader2, Globe, FileText, FolderTree, ImagePlus, ChevronUp, ChevronDown } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
@@ -18,6 +18,8 @@ import {
   useDeletePost,
   usePublishPost,
   useUnpublishPost,
+  useUploadImage,
+  useReorderPosts,
   useSectionTree,
 } from "@/hooks/use-api";
 import { isAuthenticated, getToken } from "@/lib/api";
@@ -36,6 +38,7 @@ interface EditablePost {
   status: "DRAFT" | "PUBLISHED";
   readingTime: number;
   sectionId: string | null;
+  order: number;
 }
 
 const Admin = () => {
@@ -44,6 +47,9 @@ const Admin = () => {
   const [isCreating, setIsCreating] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [view, setView] = useState<View>("list");
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const contentTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   
   // Auth state
   const [username, setUsername] = useState("");
@@ -64,6 +70,8 @@ const Admin = () => {
   const deleteMutation = useDeletePost();
   const publishMutation = usePublishPost();
   const unpublishMutation = useUnpublishPost();
+  const uploadImageMutation = useUploadImage();
+  const reorderMutation = useReorderPosts();
   const { data: sectionData, isLoading: isLoadingSections } = useSectionTree();
   const sections = sectionData?.sections ?? [];
 
@@ -175,6 +183,7 @@ const Admin = () => {
     status: "DRAFT",
     readingTime: 5,
     sectionId: null,
+    order: 0,
   };
 
   const handleEdit = (post: ApiPost | typeof posts[number]) => {
@@ -189,6 +198,7 @@ const Admin = () => {
       status: "status" in post ? (post.status as "DRAFT" | "PUBLISHED") : "DRAFT",
       readingTime: post.readingTime,
       sectionId: (post as any).sectionId ?? null,
+      order: post.order ?? 0,
     });
     setIsCreating(false);
     setShowPreview(false);
@@ -196,7 +206,7 @@ const Admin = () => {
   };
 
   const handleCreate = () => {
-    setEditingPost({ ...emptyPost });
+    setEditingPost({ ...emptyPost, order: 0 });
     setIsCreating(true);
     setShowPreview(false);
     setView("edit");
@@ -216,6 +226,7 @@ const Admin = () => {
           coverImage: editingPost.coverImage || null,
           status: editingPost.status,
           sectionId: editingPost.sectionId || null,
+          order: editingPost.order,
         };
         await createMutation.mutateAsync(createData);
       } else if (editingPost.id) {
@@ -228,6 +239,7 @@ const Admin = () => {
           coverImage: editingPost.coverImage || null,
           status: editingPost.status,
           sectionId: editingPost.sectionId,
+          order: editingPost.order,
         };
         await updateMutation.mutateAsync({ id: editingPost.id, data: updateData });
       }
@@ -267,6 +279,7 @@ const Admin = () => {
     setEditingPost(null);
     setIsCreating(false);
     setShowPreview(false);
+    setUploadError(null);
     setView("list");
   };
 
@@ -274,6 +287,82 @@ const Admin = () => {
     if (editingPost) {
       setEditingPost({ ...editingPost, [field]: value });
     }
+  };
+
+  const insertIntoContentAtCursor = (textToInsert: string) => {
+    if (!editingPost) return;
+
+    const textarea = contentTextareaRef.current;
+    const value = editingPost.content;
+
+    if (!textarea) {
+      updateField("content", `${value}${value.endsWith("\n") ? "" : "\n"}${textToInsert}`);
+      return;
+    }
+
+    const start = textarea.selectionStart ?? value.length;
+    const end = textarea.selectionEnd ?? value.length;
+    const nextValue = `${value.slice(0, start)}${textToInsert}${value.slice(end)}`;
+    updateField("content", nextValue);
+
+    requestAnimationFrame(() => {
+      const position = start + textToInsert.length;
+      textarea.focus();
+      textarea.setSelectionRange(position, position);
+    });
+  };
+
+  const handleImagePick = () => {
+    setUploadError(null);
+    fileInputRef.current?.click();
+  };
+
+  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      setUploadError("Please select a valid image file.");
+      return;
+    }
+
+    try {
+      setUploadError(null);
+      const uploaded = await uploadImageMutation.mutateAsync(file);
+      const altText = file.name.replace(/\.[^.]+$/, "").replace(/[-_]+/g, " ").trim() || "image";
+      const markdown = `\n![${altText}](${uploaded.url})\n`;
+      insertIntoContentAtCursor(markdown);
+    } catch (error) {
+      setUploadError(
+        uploadImageMutation.error?.message || "Image upload failed. Please try again."
+      );
+    }
+  };
+
+  const getSectionKey = (post: { sectionId?: string | null; section?: { id: string } | null }) =>
+    post.sectionId ?? post.section?.id ?? null;
+
+  const handleMovePost = async (postId: string, direction: "up" | "down") => {
+    const targetPost = posts.find((p) => p.id === postId);
+    if (!targetPost) return;
+
+    const targetSectionKey = getSectionKey(targetPost);
+    const siblings = posts.filter((p) => getSectionKey(p) === targetSectionKey);
+    const sorted = [...siblings].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+
+    const idx = sorted.findIndex((p) => p.id === postId);
+    if (idx === -1) return;
+    if (direction === "up" && idx === 0) return;
+    if (direction === "down" && idx === sorted.length - 1) return;
+
+    const swapIdx = direction === "up" ? idx - 1 : idx + 1;
+    const reordered = [...sorted];
+    [reordered[idx], reordered[swapIdx]] = [reordered[swapIdx], reordered[idx]];
+
+    const updates = reordered.map((p, i) => ({ id: p.id, order: i }));
+    await reorderMutation.mutateAsync({ posts: updates });
   };
 
   const isSaving = createMutation.isPending || updateMutation.isPending;
@@ -287,7 +376,7 @@ const Admin = () => {
           <Breadcrumb
             items={[
               { label: "Home", to: "/" },
-              { label: "Admin", to: "/manohar" },
+              { label: "Admin", onClick: handleBack },
               { label: breadcrumbLabel },
             ]}
           />
@@ -388,10 +477,39 @@ const Admin = () => {
               <label className="block text-sm font-medium text-foreground mb-1">
                 Content (Markdown)
               </label>
+              <div className="mb-2 flex items-center gap-2">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleImageUpload}
+                />
+                <button
+                  type="button"
+                  onClick={handleImagePick}
+                  disabled={uploadImageMutation.isPending}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-border/60 text-xs text-foreground hover:bg-secondary transition-colors disabled:opacity-50"
+                >
+                  {uploadImageMutation.isPending ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <ImagePlus className="w-3.5 h-3.5" />
+                  )}
+                  Upload image
+                </button>
+                <span className="text-xs text-muted-foreground">
+                  Inserts `![alt](url)` into markdown.
+                </span>
+              </div>
+              {uploadError && (
+                <p className="mb-2 text-xs text-destructive">{uploadError}</p>
+              )}
               {showPreview ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
                     <textarea
+                      ref={contentTextareaRef}
                       value={editingPost.content}
                       onChange={(e) => updateField("content", e.target.value)}
                       className="w-full h-[320px] sm:h-[400px] px-3 py-2 rounded-md bg-background border border-border text-foreground font-mono text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-primary transition-shadow resize-none"
@@ -410,6 +528,7 @@ const Admin = () => {
                 </div>
               ) : (
                 <textarea
+                  ref={contentTextareaRef}
                   value={editingPost.content}
                   onChange={(e) => updateField("content", e.target.value)}
                   className="w-full h-[320px] sm:h-[400px] px-3 py-2 rounded-md bg-background border border-border text-foreground font-mono text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-primary transition-shadow resize-none"
@@ -446,6 +565,22 @@ const Admin = () => {
                   onChange={(e) => updateField("readingTime", parseInt(e.target.value) || 5)}
                   className="w-full px-3 py-1.5 rounded-md bg-background border border-border text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary transition-shadow"
                   min="1"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1">
+                  Order
+                  <span className="ml-1.5 text-xs font-normal text-muted-foreground">(display position)</span>
+                </label>
+                <input
+                  type="number"
+                  value={editingPost.order}
+                  onChange={(e) => updateField("order", parseInt(e.target.value) || 0)}
+                  className="w-full px-3 py-1.5 rounded-md bg-background border border-border text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary transition-shadow"
+                  min="0"
                 />
               </div>
             </div>
@@ -519,9 +654,28 @@ const Admin = () => {
                 <FileText className="w-12 h-12 mx-auto mb-3 opacity-50" />
                 <p>No posts yet. Create your first post!</p>
               </div>
-            ) : (
-              posts.map((post, i) => {
+            ) : (() => {
+              // Precompute first/last position per section so up/down buttons are correct
+              const sectionPositions = new Map<string, { isFirst: boolean; isLast: boolean }>();
+              const sectionGroups = new Map<string | null, typeof posts>();
+              for (const p of posts) {
+                const key = getSectionKey(p);
+                if (!sectionGroups.has(key)) sectionGroups.set(key, []);
+                sectionGroups.get(key)!.push(p);
+              }
+              for (const group of sectionGroups.values()) {
+                const sorted = [...group].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+                sorted.forEach((p, i) => {
+                  sectionPositions.set(p.id, { isFirst: i === 0, isLast: i === sorted.length - 1 });
+                });
+              }
+
+              return [...posts]
+                .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+                .map((post, i) => {
                 const status = "status" in post ? post.status : "DRAFT";
+                const { isFirst, isLast } = sectionPositions.get(post.id) ?? { isFirst: true, isLast: true };
+                const isReordering = reorderMutation.isPending;
                 return (
                   <div
                     key={post.id}
@@ -531,6 +685,9 @@ const Admin = () => {
                     <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
                       <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 min-w-0 flex-1">
                         <div className="flex items-center gap-2 min-w-0">
+                          <span className="text-[11px] font-mono text-muted-foreground shrink-0 tabular-nums">
+                            #{post.order ?? 0}
+                          </span>
                           <h3 className="text-sm sm:text-base font-medium text-foreground truncate">
                             {post.title}
                           </h3>
@@ -557,6 +714,23 @@ const Admin = () => {
                       </div>
 
                       <div className="flex items-center gap-1 shrink-0">
+                        {/* Reorder buttons */}
+                        <button
+                          onClick={() => handleMovePost(post.id, "up")}
+                          disabled={isFirst || isReordering}
+                          className="p-1.5 rounded-md hover:bg-secondary transition-colors disabled:opacity-30"
+                          title="Move up"
+                        >
+                          <ChevronUp className="w-3.5 h-3.5 text-muted-foreground" />
+                        </button>
+                        <button
+                          onClick={() => handleMovePost(post.id, "down")}
+                          disabled={isLast || isReordering}
+                          className="p-1.5 rounded-md hover:bg-secondary transition-colors disabled:opacity-30"
+                          title="Move down"
+                        >
+                          <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
+                        </button>
                         <button
                           onClick={() => handleTogglePublish(post)}
                           disabled={publishMutation.isPending || unpublishMutation.isPending}
@@ -599,8 +773,8 @@ const Admin = () => {
                     </div>
                   </div>
                 );
-              })
-            )}
+              });
+            })()}
           </div>
         )}
       </section>

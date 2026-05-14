@@ -8,13 +8,23 @@ import type { ApiPostSummary, ApiSectionNode } from "@/lib/api";
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
+/** Sort sections: order ASC, then numeric name prefix ASC for ties (e.g. "1. Scopes" before "5. DOM") */
+function sortSections(nodes: ApiSectionNode[]): ApiSectionNode[] {
+  return [...nodes].sort((a, b) => {
+    if (a.order !== b.order) return a.order - b.order;
+    const numA = parseInt(a.name.match(/^(\d+)/)?.[1] ?? "999", 10);
+    const numB = parseInt(b.name.match(/^(\d+)/)?.[1] ?? "999", 10);
+    return numA - numB;
+  });
+}
+
 /** Flatten a section tree into an ordered list with depth info */
 function flattenSections(
   nodes: ApiSectionNode[],
   depth = 0
 ): { node: ApiSectionNode; depth: number }[] {
   const result: { node: ApiSectionNode; depth: number }[] = [];
-  for (const n of nodes) {
+  for (const n of sortSections(nodes)) {
     result.push({ node: n, depth });
     if (n.children?.length) result.push(...flattenSections(n.children, depth + 1));
   }
@@ -37,21 +47,21 @@ function getPostSectionId(p: ApiPostSummary): string | null {
 
 // ── Section group component ────────────────────────────────────────────────
 
+function countAllPosts(node: ApiSectionNode): number {
+  return (node._count?.posts ?? 0) + (node.children ?? []).reduce((sum, c) => sum + countAllPosts(c), 0);
+}
+
 interface SectionGroupProps {
   node: ApiSectionNode;
   depth: number;
-  posts: ApiPostSummary[];
-  allPosts: ApiPostSummary[];
   defaultOpen?: boolean;
   baseIndex: number;
 }
 
-const SectionGroup = ({ node, depth, posts, allPosts, defaultOpen = true, baseIndex }: SectionGroupProps) => {
+const SectionGroup = ({ node, depth, defaultOpen = true, baseIndex }: SectionGroupProps) => {
   const [open, setOpen] = useState(defaultOpen);
-  const directPosts = posts.filter((p) => getPostSectionId(p) === node.id);
-  const totalDescendantPosts = allPosts.filter((p) =>
-    collectIds(node).includes(getPostSectionId(p) ?? "")
-  ).length;
+  const directPosts = node.posts ?? [];
+  const totalDescendantPosts = countAllPosts(node);
 
   if (totalDescendantPosts === 0) return null;
 
@@ -83,7 +93,7 @@ const SectionGroup = ({ node, depth, posts, allPosts, defaultOpen = true, baseIn
           className={depth > 0 ? "border-l border-border/40 ml-3" : ""}
           style={{ paddingLeft: `${depth === 0 ? 16 : 12}px` }}
         >
-          {/* Direct posts in this section */}
+          {/* Direct posts in this section — order comes from API */}
           {directPosts.length > 0 && (
             <div>
               {directPosts.map((post, i) => (
@@ -92,14 +102,12 @@ const SectionGroup = ({ node, depth, posts, allPosts, defaultOpen = true, baseIn
             </div>
           )}
 
-          {/* Child sections */}
-          {(node.children ?? []).map((child) => (
+          {/* Child sections — sorted by order, then numeric name prefix */}
+          {sortSections(node.children ?? []).map((child) => (
             <SectionGroup
               key={child.id}
               node={child}
               depth={depth + 1}
-              posts={posts}
-              allPosts={allPosts}
               defaultOpen={depth < 2}
               baseIndex={baseIndex}
             />
@@ -122,7 +130,7 @@ const Blog = () => {
   const [uncategorizedOpen, setUncategorizedOpen] = useState(true);
   const [page, setPage] = useState(1);
 
-  const { data, isLoading, isError } = usePosts({ limit: 100, sort: "createdAt", order: "desc" });
+  const { data, isLoading, isError } = usePosts({ limit: 100, sort: "order", order: "asc" });
   const { data: sectionData } = useSectionTree();
 
   const posts = data?.posts ?? [];
@@ -291,14 +299,12 @@ const Blog = () => {
         {/* ── GROUPED VIEW ── accordion by section */}
         {!isLoading && showGrouped && (
           <div className="space-y-2">
-            {sections.map((node) => (
+            {sortSections(sections).map((node) => (
               <SectionGroup
                 key={node.id}
                 node={node}
                 depth={0}
-                posts={posts}
-                allPosts={posts}
-                defaultOpen={true}  // depth 0 — always open
+                defaultOpen={true}
                 baseIndex={0}
               />
             ))}
