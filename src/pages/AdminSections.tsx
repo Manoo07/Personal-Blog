@@ -46,6 +46,37 @@ function slugify(name: string): string {
     .replace(/\s+/g, "-");
 }
 
+function findNodeInTree(
+  nodes: ApiSectionNode[],
+  id: string,
+  parentId: string | null = null,
+  parentNode: ApiSectionNode | null = null
+): { node: ApiSectionNode; parentId: string | null; parentNode: ApiSectionNode | null } | null {
+  for (const node of nodes) {
+    if (node.id === id) return { node, parentId, parentNode };
+    const found = findNodeInTree(node.children ?? [], id, node.id, node);
+    if (found) return found;
+  }
+  return null;
+}
+
+function isDescendantOf(node: ApiSectionNode, targetId: string): boolean {
+  return (node.children ?? []).some(
+    (c) => c.id === targetId || isDescendantOf(c, targetId)
+  );
+}
+
+type DropZone = "above" | "into" | "below";
+
+function getDropZone(e: React.DragEvent): DropZone {
+  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+  const y = e.clientY - rect.top;
+  const h = rect.height;
+  if (y < h * 0.25) return "above";
+  if (y > h * 0.75) return "below";
+  return "into";
+}
+
 // ── Inline editor component ───────────────────────────────────────────────
 
 interface InlineEditorProps {
@@ -162,7 +193,6 @@ const PostAssignPanel = ({
 
   return (
     <div className="mt-1 mb-2 rounded-md border border-border/50 bg-background/60 overflow-hidden">
-      {/* Assigned posts */}
       {assigned.length > 0 && (
         <div className="px-3 pt-2.5 pb-1.5">
           <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">
@@ -205,10 +235,8 @@ const PostAssignPanel = ({
         </div>
       )}
 
-      {/* Divider */}
       {assigned.length > 0 && <div className="border-t border-border/40 mx-3" />}
 
-      {/* Search + suggestions */}
       <div className="px-3 pt-2 pb-2.5">
         <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">
           Add posts
@@ -303,6 +331,7 @@ interface SectionRowProps {
   siblings: ApiSectionNode[];
   onMoveSection: (id: string, direction: "up" | "down", siblings: ApiSectionNode[]) => void;
   onReorder: (updates: { id: string; order: number }[]) => Promise<void>;
+  onMoveTo: (draggedId: string, targetId: string, zone: DropZone) => Promise<void>;
   isReordering: boolean;
   // Post assignment
   allPosts: ApiPostSummary[];
@@ -333,6 +362,7 @@ const SectionRow = ({
   siblings,
   onMoveSection,
   onReorder,
+  onMoveTo,
   isReordering,
   allPosts,
   assigningPostsOf,
@@ -481,6 +511,7 @@ const SectionRow = ({
             nodes={node.children ?? []}
             depth={depth + 1}
             onReorder={onReorder}
+            onMoveTo={onMoveTo}
             isReordering={isReordering}
             expanded={expanded}
             onToggle={onToggle}
@@ -522,12 +553,13 @@ const SectionRow = ({
   );
 };
 
-// ── Draggable sibling list ────────────────────────────────────────────────
+// ── Draggable section list ────────────────────────────────────────────────
 
 interface DraggableSectionListProps {
   nodes: ApiSectionNode[];
   depth: number;
   onReorder: (updates: { id: string; order: number }[]) => Promise<void>;
+  onMoveTo: (draggedId: string, targetId: string, zone: DropZone) => Promise<void>;
   isReordering: boolean;
   expanded: Set<string>;
   onToggle: (id: string) => void;
@@ -554,6 +586,7 @@ const DraggableSectionList = ({
   nodes,
   depth,
   onReorder,
+  onMoveTo,
   isReordering,
   ...rowProps
 }: DraggableSectionListProps) => {
@@ -561,9 +594,9 @@ const DraggableSectionList = ({
     [...nodes].sort((a, b) => a.order - b.order)
   );
   const [draggingId, setDraggingId] = useState<string | null>(null);
-  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
+  const [movingId, setMovingId] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<{ idx: number; zone: DropZone } | null>(null);
   const [revertError, setRevertError] = useState<string | null>(null);
-  const dragIdxRef = useRef<number | null>(null);
 
   // Sync with server data whenever nodes change (but not mid-drag)
   useEffect(() => {
@@ -572,50 +605,68 @@ const DraggableSectionList = ({
     }
   }, [nodes, draggingId]);
 
-  const handleDragStart = (e: React.DragEvent, id: string, idx: number) => {
+  const handleDragStart = (e: React.DragEvent, id: string) => {
     e.dataTransfer.effectAllowed = "move";
     e.dataTransfer.setData("text/plain", id);
-    dragIdxRef.current = idx;
     setRevertError(null);
     setTimeout(() => setDraggingId(id), 0);
   };
 
   const handleDragOver = (e: React.DragEvent, idx: number) => {
     e.preventDefault();
+    e.stopPropagation(); // only the innermost hovered row handles this
     e.dataTransfer.dropEffect = "move";
-    if (dragIdxRef.current !== null && dragIdxRef.current !== idx) {
-      setDragOverIdx(idx);
-    }
+    setDropTarget({ idx, zone: getDropZone(e) });
   };
 
-  const handleDrop = async (e: React.DragEvent, dropIdx: number) => {
+  const handleDrop = async (e: React.DragEvent, idx: number) => {
     e.preventDefault();
-    const fromIdx = dragIdxRef.current;
+    e.stopPropagation();
+
+    const draggedId = e.dataTransfer.getData("text/plain");
+    const zone = dropTarget?.idx === idx ? dropTarget.zone : getDropZone(e);
+    const targetNode = orderedNodes[idx];
+
     setDraggingId(null);
-    setDragOverIdx(null);
-    dragIdxRef.current = null;
-    if (fromIdx === null || fromIdx === dropIdx) return;
+    setDropTarget(null);
 
-    // Optimistic update — reorder immediately in the UI
-    const previous = [...orderedNodes];
-    const reordered = [...orderedNodes];
-    const [moved] = reordered.splice(fromIdx, 1);
-    reordered.splice(dropIdx, 0, moved);
-    setOrderedNodes(reordered);
+    if (!draggedId || !targetNode || draggedId === targetNode.id) return;
 
-    try {
-      await onReorder(reordered.map((s, i) => ({ id: s.id, order: i })));
-    } catch {
-      // Revert to previous order and surface the error
-      setOrderedNodes(previous);
-      setRevertError("Reorder failed — changes reverted.");
+    const isSibling = orderedNodes.some((n) => n.id === draggedId);
+
+    if (isSibling && zone !== "into") {
+      // Same-parent reorder — optimistic update
+      const draggedNode = orderedNodes.find((n) => n.id === draggedId)!;
+      const previous = [...orderedNodes];
+      const withoutDragged = orderedNodes.filter((n) => n.id !== draggedId);
+      const targetIdx = withoutDragged.findIndex((n) => n.id === targetNode.id);
+      const insertIdx = zone === "above" ? targetIdx : targetIdx + 1;
+      const reordered = [...withoutDragged];
+      reordered.splice(insertIdx, 0, draggedNode);
+      setOrderedNodes(reordered);
+
+      try {
+        await onReorder(reordered.map((s, i) => ({ id: s.id, order: i })));
+      } catch {
+        setOrderedNodes(previous);
+        setRevertError("Reorder failed — changes reverted.");
+      }
+    } else {
+      // Cross-parent move, or nesting into a sibling — delegate to tree handler
+      setMovingId(draggedId);
+      try {
+        await onMoveTo(draggedId, targetNode.id, zone);
+      } catch {
+        setRevertError("Move failed — please try again.");
+      } finally {
+        setMovingId(null);
+      }
     }
   };
 
   const handleDragEnd = () => {
     setDraggingId(null);
-    setDragOverIdx(null);
-    dragIdxRef.current = null;
+    setDropTarget(null);
   };
 
   return (
@@ -632,33 +683,40 @@ const DraggableSectionList = ({
           </button>
         </div>
       )}
-      {orderedNodes.map((node, i) => (
-        <div
-          key={node.id}
-          draggable={!isReordering}
-          onDragStart={(e) => handleDragStart(e, node.id, i)}
-          onDragOver={(e) => handleDragOver(e, i)}
-          onDrop={(e) => handleDrop(e, i)}
-          onDragEnd={handleDragEnd}
-          className={[
-            draggingId === node.id ? "opacity-40" : "",
-            dragOverIdx === i && draggingId !== node.id
-              ? "border-t-2 border-primary"
-              : "border-t-2 border-transparent",
-          ].join(" ")}
-        >
-          <SectionRow
-            node={node}
-            depth={depth}
-            isFirst={i === 0}
-            isLast={i === orderedNodes.length - 1}
-            siblings={orderedNodes}
-            onReorder={onReorder}
-            isReordering={isReordering}
-            {...rowProps}
-          />
-        </div>
-      ))}
+      {orderedNodes.map((node, i) => {
+        const dz = dropTarget?.idx === i ? dropTarget.zone : null;
+        return (
+          <div
+            key={node.id}
+            draggable={!isReordering}
+            onDragStart={(e) => handleDragStart(e, node.id)}
+            onDragOver={(e) => handleDragOver(e, i)}
+            onDrop={(e) => handleDrop(e, i)}
+            onDragEnd={handleDragEnd}
+            className={[
+              "border-t-2 border-b-2 transition-colors",
+              draggingId === node.id || movingId === node.id ? "opacity-40" : "",
+              dz === "above" ? "border-t-primary" : "border-t-transparent",
+              dz === "below" ? "border-b-primary" : "border-b-transparent",
+              dz === "into" ? "rounded-md ring-2 ring-inset ring-primary/40 bg-primary/5" : "",
+            ]
+              .filter(Boolean)
+              .join(" ")}
+          >
+            <SectionRow
+              node={node}
+              depth={depth}
+              isFirst={i === 0}
+              isLast={i === orderedNodes.length - 1}
+              siblings={orderedNodes}
+              onReorder={onReorder}
+              onMoveTo={onMoveTo}
+              isReordering={isReordering}
+              {...rowProps}
+            />
+          </div>
+        );
+      })}
     </>
   );
 };
@@ -712,7 +770,6 @@ const AdminSections = () => {
     setAddingChildOf(id);
     setEditingId(null);
     setAddingRoot(false);
-    // auto-expand so the inline editor appears inside the node
     setExpanded((prev) => new Set([...prev, id]));
   };
 
@@ -768,6 +825,65 @@ const AdminSections = () => {
     [reordered[idx], reordered[swapIdx]] = [reordered[swapIdx], reordered[idx]];
 
     await handleReorderSections(reordered.map((s, i) => ({ id: s.id, order: i })));
+  };
+
+  /** Tree-wide drag: move a section to a new parent or position. */
+  const handleSectionMoveTo = async (
+    draggedId: string,
+    targetId: string,
+    zone: DropZone
+  ) => {
+    if (draggedId === targetId) return;
+
+    const draggedResult = findNodeInTree(sections, draggedId);
+    const targetResult = findNodeInTree(sections, targetId);
+    if (!draggedResult || !targetResult) return;
+
+    const { node: draggedNode, parentId: draggedParentId } = draggedResult;
+    const { node: targetNode, parentId: targetParentId, parentNode: targetParentNode } = targetResult;
+
+    if (zone === "into") {
+      // Prevent nesting into own descendant
+      if (isDescendantOf(draggedNode, targetId)) return;
+
+      const targetChildren = (targetNode.children ?? [])
+        .filter((c) => c.id !== draggedId)
+        .sort((a, b) => a.order - b.order);
+
+      await updateMutation.mutateAsync({
+        id: draggedId,
+        data: { parentId: targetNode.id, order: targetChildren.length },
+      });
+
+      // Auto-expand the target so user sees the moved section
+      setExpanded((prev) => new Set([...prev, targetId]));
+    } else {
+      // Drop above or below → become sibling of target at target's level
+      const newParentId = targetParentId;
+
+      const targetLevelNodes = (
+        newParentId === null ? sections : (targetParentNode?.children ?? [])
+      )
+        .filter((s) => s.id !== draggedId)
+        .sort((a, b) => a.order - b.order);
+
+      const targetIdx = targetLevelNodes.findIndex((s) => s.id === targetId);
+      const insertIdx = zone === "above" ? targetIdx : targetIdx + 1;
+      const reordered = [...targetLevelNodes];
+      reordered.splice(insertIdx, 0, draggedNode);
+
+      // Change parentId first if moving cross-parent
+      if (draggedParentId !== newParentId) {
+        await updateMutation.mutateAsync({
+          id: draggedId,
+          data: { parentId: newParentId },
+        });
+      }
+
+      await reorderMutation.mutateAsync({
+        sections: reordered.map((s, i) => ({ id: s.id, order: i })),
+      });
+    }
   };
 
   const handleDelete = async (id: string, name: string) => {
@@ -878,7 +994,8 @@ const AdminSections = () => {
                 nodes={sections}
                 depth={0}
                 onReorder={handleReorderSections}
-                isReordering={reorderMutation.isPending}
+                onMoveTo={handleSectionMoveTo}
+                isReordering={reorderMutation.isPending || updateMutation.isPending}
                 expanded={expanded}
                 onToggle={handleToggle}
                 editingId={editingId}
@@ -905,7 +1022,7 @@ const AdminSections = () => {
 
         {/* Footer tip */}
         <p className="mt-4 text-xs text-muted-foreground text-center">
-          Hover over any section to rename, add children, or delete it.
+          Drag sections across folders, or hover to rename, add children, or delete.
         </p>
       </section>
     </Layout>
