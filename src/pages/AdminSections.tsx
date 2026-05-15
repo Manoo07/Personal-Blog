@@ -17,6 +17,7 @@ import {
   LogOut,
   FolderTree,
   BookOpen,
+  FileText,
   Search,
   Link2,
   Link2Off,
@@ -84,6 +85,19 @@ function getDropZone(e: React.DragEvent): DropZone {
   if (y < h * 0.25) return "above";
   if (y > h * 0.75) return "below";
   return "into";
+}
+
+/** Depth-based folder colour palette, VS Code style. */
+const FOLDER_PALETTE = [
+  { open: "text-amber-400",   closed: "text-amber-500/50"   }, // depth 0
+  { open: "text-sky-400",     closed: "text-sky-500/50"     }, // depth 1
+  { open: "text-emerald-400", closed: "text-emerald-500/50" }, // depth 2
+  { open: "text-violet-400",  closed: "text-violet-500/50"  }, // depth 3+
+];
+
+function folderColor(depth: number, isOpen: boolean): string {
+  const entry = FOLDER_PALETTE[Math.min(depth, FOLDER_PALETTE.length - 1)];
+  return isOpen ? entry.open : entry.closed;
 }
 
 // ── Inline editor component ───────────────────────────────────────────────
@@ -214,7 +228,7 @@ const PostAssignPanel = ({
                 className="flex items-center justify-between gap-2 px-2 py-1 rounded hover:bg-secondary/60 group transition-colors"
               >
                 <div className="flex items-center gap-1.5 min-w-0">
-                  <BookOpen className="w-3 h-3 text-primary shrink-0" />
+                  <FileText className="w-3 h-3 text-primary shrink-0" />
                   <span className="text-sm text-foreground truncate">{post.title}</span>
                   {post.tags.slice(0, 2).map((tag) => (
                     <span
@@ -279,7 +293,7 @@ const PostAssignPanel = ({
                 className="flex items-center justify-between gap-2 px-2 py-1 rounded hover:bg-secondary/60 group transition-colors"
               >
                 <div className="flex items-center gap-1.5 min-w-0">
-                  <BookOpen className="w-3 h-3 text-muted-foreground shrink-0" />
+                  <FileText className="w-3 h-3 text-muted-foreground shrink-0" />
                   <span className="text-sm text-foreground truncate">{post.title}</span>
                   {post.sectionId && (
                     <span className="hidden sm:inline text-[10px] font-mono px-1 py-0.5 rounded bg-primary/10 text-primary shrink-0">
@@ -389,9 +403,16 @@ const SectionRow = ({
   const assignedCount = allPosts.filter((p) => p.sectionId === node.id).length;
 
   return (
-    <div>
+    <div className="relative">
+      {/* tree guide line for nested items */}
+      {depth > 0 && (
+        <div
+          className="absolute top-0 bottom-0 w-px bg-border/25 pointer-events-none"
+          style={{ left: `${8 + (depth - 1) * 20 + 18}px` }}
+        />
+      )}
       <div
-        className="group flex items-center gap-1.5 py-1.5 rounded-md hover:bg-secondary/60 transition-colors"
+        className="group flex items-center gap-1.5 py-1 rounded-md hover:bg-secondary/60 transition-colors"
         style={{ paddingLeft: `${8 + depth * 20}px`, paddingRight: "8px" }}
       >
         {/* drag handle */}
@@ -412,8 +433,8 @@ const SectionRow = ({
           )}
         </button>
 
-        {/* folder icon */}
-        <span className="text-muted-foreground shrink-0">
+        {/* folder icon — VS Code depth colours */}
+        <span className={`shrink-0 ${folderColor(depth, hasChildren && isExpanded)}`}>
           {hasChildren && isExpanded ? (
             <FolderOpen className="w-3.5 h-3.5" />
           ) : (
@@ -1019,18 +1040,6 @@ const AdminSections = () => {
         {/* Content */}
         {!isLoadingSections && (
           <div className="rounded-lg border border-border/40 bg-card p-2 animate-fade-in">
-            {/* Add root inline editor */}
-            {addingRoot && (
-              <div className="px-2 py-1.5 mb-1">
-                <InlineEditor
-                  placeholder="Top-level section name"
-                  onSave={handleSaveRoot}
-                  onCancel={handleCancelEdit}
-                  isPending={createMutation.isPending}
-                />
-              </div>
-            )}
-
             {sections.length === 0 && !addingRoot ? (
               <div className="py-10 text-center text-muted-foreground">
                 <FolderTree className="w-10 h-10 mx-auto mb-3 opacity-40" />
@@ -1040,33 +1049,53 @@ const AdminSections = () => {
                 </p>
               </div>
             ) : (
-              <DraggableSectionList
-                nodes={sections}
-                depth={0}
-                onReorder={handleReorderSections}
-                onMoveTo={handleSectionMoveTo}
-                isReordering={reorderMutation.isPending || updateMutation.isPending}
-                expanded={expanded}
-                onToggle={handleToggle}
-                editingId={editingId}
-                addingChildOf={addingChildOf}
-                onStartEdit={handleStartEdit}
-                onStartAddChild={handleStartAddChild}
-                onSaveEdit={handleSaveEdit}
-                onSaveChild={handleSaveChild}
-                onCancelEdit={handleCancelEdit}
-                onDelete={handleDelete}
-                isPendingEdit={updateMutation.isPending}
-                isPendingChild={createMutation.isPending}
-                onMoveSection={handleMoveSection}
-                allPosts={allPosts}
-                assigningPostsOf={assigningPostsOf}
-                onStartAssignPosts={handleStartAssignPosts}
-                onAssignPost={handleAssignPost}
-                onUnassignPost={handleUnassignPost}
-                isPendingAssign={updatePostMutation.isPending}
-                onPromoteToRoot={handlePromoteToRoot}
-              />
+              <>
+                {sections.length > 0 && (
+                  <DraggableSectionList
+                    nodes={sections}
+                    depth={0}
+                    onReorder={handleReorderSections}
+                    onMoveTo={handleSectionMoveTo}
+                    isReordering={reorderMutation.isPending || updateMutation.isPending}
+                    expanded={expanded}
+                    onToggle={handleToggle}
+                    editingId={editingId}
+                    addingChildOf={addingChildOf}
+                    onStartEdit={handleStartEdit}
+                    onStartAddChild={handleStartAddChild}
+                    onSaveEdit={handleSaveEdit}
+                    onSaveChild={handleSaveChild}
+                    onCancelEdit={handleCancelEdit}
+                    onDelete={handleDelete}
+                    isPendingEdit={updateMutation.isPending}
+                    isPendingChild={createMutation.isPending}
+                    onMoveSection={handleMoveSection}
+                    allPosts={allPosts}
+                    assigningPostsOf={assigningPostsOf}
+                    onStartAssignPosts={handleStartAssignPosts}
+                    onAssignPost={handleAssignPost}
+                    onUnassignPost={handleUnassignPost}
+                    isPendingAssign={updatePostMutation.isPending}
+                    onPromoteToRoot={handlePromoteToRoot}
+                  />
+                )}
+
+                {/* Add root inline editor — rendered below existing sections so it's
+                    visually clear the new section is a sibling, not a parent */}
+                {addingRoot && (
+                  <div className={`px-2 py-1.5 ${sections.length > 0 ? "mt-1 border-t border-border/30 pt-2" : ""}`}>
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">
+                      New section — same level as existing sections
+                    </p>
+                    <InlineEditor
+                      placeholder="Section name"
+                      onSave={handleSaveRoot}
+                      onCancel={handleCancelEdit}
+                      isPending={createMutation.isPending}
+                    />
+                  </div>
+                )}
+              </>
             )}
           </div>
         )}
