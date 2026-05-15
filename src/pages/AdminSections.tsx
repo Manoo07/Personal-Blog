@@ -21,6 +21,7 @@ import {
   Link2,
   Link2Off,
   GripVertical,
+  CornerUpLeft,
 } from "lucide-react";
 import {
   useVerifyToken,
@@ -35,6 +36,14 @@ import {
 } from "@/hooks/use-api";
 import { getToken } from "@/lib/api";
 import type { ApiSectionNode, ApiPostSummary } from "@/lib/api";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 
 // ── helpers ───────────────────────────────────────────────────────────────
 
@@ -340,6 +349,7 @@ interface SectionRowProps {
   onAssignPost: (postId: string, sectionId: string) => Promise<void>;
   onUnassignPost: (postId: string) => Promise<void>;
   isPendingAssign: boolean;
+  onPromoteToRoot: (id: string) => void;
 }
 
 const SectionRow = ({
@@ -370,6 +380,7 @@ const SectionRow = ({
   onAssignPost,
   onUnassignPost,
   isPendingAssign,
+  onPromoteToRoot,
 }: SectionRowProps) => {
   const isExpanded = expanded.has(node.id);
   const hasChildren = (node.children ?? []).length > 0 || addingChildOf === node.id;
@@ -462,6 +473,16 @@ const SectionRow = ({
               >
                 <BookOpen className="w-3.5 h-3.5" />
               </button>
+              {depth > 0 && (
+                <button
+                  type="button"
+                  onClick={() => onPromoteToRoot(node.id)}
+                  className="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
+                  title="Promote to root level"
+                >
+                  <CornerUpLeft className="w-3.5 h-3.5" />
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => onStartAddChild(node.id)}
@@ -532,6 +553,7 @@ const SectionRow = ({
             onAssignPost={onAssignPost}
             onUnassignPost={onUnassignPost}
             isPendingAssign={isPendingAssign}
+            onPromoteToRoot={onPromoteToRoot}
           />
 
           {addingChildOf === node.id && (
@@ -580,6 +602,7 @@ interface DraggableSectionListProps {
   onAssignPost: (postId: string, sectionId: string) => Promise<void>;
   onUnassignPost: (postId: string) => Promise<void>;
   isPendingAssign: boolean;
+  onPromoteToRoot: (id: string) => void;
 }
 
 const DraggableSectionList = ({
@@ -730,6 +753,11 @@ const AdminSections = () => {
   const [addingChildOf, setAddingChildOf] = useState<string | null>(null);
   const [addingRoot, setAddingRoot] = useState(false);
   const [assigningPostsOf, setAssigningPostsOf] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<{
+    id: string;
+    name: string;
+    childrenCount: number;
+  } | null>(null);
 
   const hasToken = !!getToken();
   const { data: authData, isLoading: isVerifying } = useVerifyToken();
@@ -886,10 +914,32 @@ const AdminSections = () => {
     }
   };
 
-  const handleDelete = async (id: string, name: string) => {
-    if (confirm(`Delete "${name}"? Any child sections will also be removed, and posts in this section will become unsectioned.`)) {
-      await deleteMutation.mutateAsync(id);
-    }
+  const handlePromoteToRoot = async (id: string) => {
+    await updateMutation.mutateAsync({ id, data: { parentId: null } });
+  };
+
+  const handleDelete = (id: string, name: string) => {
+    const result = findNodeInTree(sections, id);
+    const childrenCount = (result?.node.children ?? []).length;
+    setPendingDelete({ id, name, childrenCount });
+  };
+
+  const handleDeleteCascade = async () => {
+    if (!pendingDelete) return;
+    await deleteMutation.mutateAsync({ id: pendingDelete.id, mode: "cascade" });
+    setPendingDelete(null);
+  };
+
+  const handleDeletePromote = async () => {
+    if (!pendingDelete) return;
+    await deleteMutation.mutateAsync({ id: pendingDelete.id, mode: "promote" });
+    setPendingDelete(null);
+  };
+
+  const handleDeleteSimple = async () => {
+    if (!pendingDelete) return;
+    await deleteMutation.mutateAsync({ id: pendingDelete.id });
+    setPendingDelete(null);
   };
 
   // Auth guard
@@ -1015,6 +1065,7 @@ const AdminSections = () => {
                 onAssignPost={handleAssignPost}
                 onUnassignPost={handleUnassignPost}
                 isPendingAssign={updatePostMutation.isPending}
+                onPromoteToRoot={handlePromoteToRoot}
               />
             )}
           </div>
@@ -1025,6 +1076,89 @@ const AdminSections = () => {
           Drag sections across folders, or hover to rename, add children, or delete.
         </p>
       </section>
+
+      {/* Delete confirmation dialog */}
+      <Dialog open={!!pendingDelete} onOpenChange={(open) => !open && setPendingDelete(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete &ldquo;{pendingDelete?.name}&rdquo;</DialogTitle>
+            <DialogDescription>
+              {pendingDelete?.childrenCount
+                ? `This section has ${pendingDelete.childrenCount} child section${pendingDelete.childrenCount > 1 ? "s" : ""}. Choose what to do with them.`
+                : "This will permanently delete the section. Any posts inside will be unassigned."}
+            </DialogDescription>
+          </DialogHeader>
+
+          {pendingDelete?.childrenCount ? (
+            <div className="flex flex-col gap-3 py-1">
+              {/* Option 1 — cascade */}
+              <button
+                type="button"
+                onClick={handleDeleteCascade}
+                disabled={deleteMutation.isPending}
+                className="flex items-start gap-3 rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-left hover:bg-destructive/10 transition-colors disabled:opacity-50"
+              >
+                <Trash2 className="w-4 h-4 mt-0.5 shrink-0 text-destructive" />
+                <div>
+                  <p className="text-sm font-medium text-foreground">Delete all children</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Permanently removes this section and all {pendingDelete.childrenCount} child section{pendingDelete.childrenCount > 1 ? "s" : ""} (and their descendants). Posts are unassigned.
+                  </p>
+                </div>
+              </button>
+
+              {/* Option 2 — promote */}
+              <button
+                type="button"
+                onClick={handleDeletePromote}
+                disabled={deleteMutation.isPending}
+                className="flex items-start gap-3 rounded-lg border border-border bg-secondary/40 p-3 text-left hover:bg-secondary/70 transition-colors disabled:opacity-50"
+              >
+                <CornerUpLeft className="w-4 h-4 mt-0.5 shrink-0 text-foreground" />
+                <div>
+                  <p className="text-sm font-medium text-foreground">
+                    Promote children to root
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Moves all {pendingDelete.childrenCount} direct child section{pendingDelete.childrenCount > 1 ? "s" : ""} to the top level, then deletes this section. Their sub-sections remain intact.
+                  </p>
+                </div>
+              </button>
+
+              <DialogFooter className="mt-1">
+                <button
+                  type="button"
+                  onClick={() => setPendingDelete(null)}
+                  className="px-3 py-1.5 rounded-md border border-border text-sm text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+                >
+                  Cancel
+                </button>
+              </DialogFooter>
+            </div>
+          ) : (
+            <DialogFooter>
+              <button
+                type="button"
+                onClick={() => setPendingDelete(null)}
+                className="px-3 py-1.5 rounded-md border border-border text-sm text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteSimple}
+                disabled={deleteMutation.isPending}
+                className="px-3 py-1.5 rounded-md bg-destructive text-destructive-foreground text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-50"
+              >
+                {deleteMutation.isPending ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin inline mr-1" />
+                ) : null}
+                Delete
+              </button>
+            </DialogFooter>
+          )}
+        </DialogContent>
+      </Dialog>
     </Layout>
   );
 };

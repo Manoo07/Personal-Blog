@@ -307,8 +307,12 @@ export function useUpdateSection() {
 
 export function useDeleteSection() {
   const queryClient = useQueryClient();
-  return useMutation<SectionDeleteResponse, ApiClientError, string>({
-    mutationFn: (id) => api.deleteSection(id),
+  return useMutation<
+    SectionDeleteResponse,
+    ApiClientError,
+    { id: string; mode?: "cascade" | "promote" }
+  >({
+    mutationFn: ({ id, mode }) => api.deleteSection(id, mode),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.sections });
       queryClient.invalidateQueries({ queryKey: queryKeys.adminPosts });

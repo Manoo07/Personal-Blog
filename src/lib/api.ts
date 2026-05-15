@@ -481,8 +481,9 @@ class ApiClient {
   }
 
   /** DELETE /api/sections/{id} — auth required, returns { message } */
-  async deleteSection(id: string): Promise<SectionDeleteResponse> {
-    return this.request(`/api/sections/${id}`, {
+  async deleteSection(id: string, mode?: "cascade" | "promote"): Promise<SectionDeleteResponse> {
+    const q = mode ? `?mode=${mode}` : "";
+    return this.request(`/api/sections/${id}${q}`, {
       method: "DELETE",
     });
   }
