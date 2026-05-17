@@ -3,7 +3,6 @@ import { useMemo } from "react";
 import {
   api,
   ApiPost,
-
   ApiSectionNode,
   ApiPostSummary,
   SectionTreeResponse,
@@ -24,6 +23,16 @@ import {
   LoginResponse,
   UploadImageResponse,
   ApiClientError,
+  UserRegisterRequest,
+  UserVerifyEmailRequest,
+  UserLoginRequest,
+  UserLoginResponse,
+  UserProfile,
+  ResetPasswordRequest,
+  UpdatePasswordRequest,
+  UserProgressItem,
+  UserStatsResponse,
+  isUserLoggedIn,
 } from "@/lib/api";
 
 // Query keys
@@ -340,6 +349,110 @@ export function useReorderSections() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.sections });
     },
+  });
+}
+
+// ============================================
+// User Auth Hooks
+// ============================================
+
+export const userQueryKeys = {
+  me: ["user", "me"] as const,
+  progress: ["user", "progress"] as const,
+  stats: ["user", "stats"] as const,
+};
+
+export function useRegister() {
+  return useMutation<{ message: string }, ApiClientError, UserRegisterRequest>({
+    mutationFn: (data) => api.registerUser(data),
+  });
+}
+
+export function useVerifyUserEmail() {
+  return useMutation<{ message: string }, ApiClientError, UserVerifyEmailRequest>({
+    mutationFn: (data) => api.verifyUserEmail(data),
+  });
+}
+
+export function useUserLogin() {
+  const queryClient = useQueryClient();
+  return useMutation<UserLoginResponse, ApiClientError, UserLoginRequest>({
+    mutationFn: (data) => api.loginUser(data),
+    onSuccess: (data) => {
+      queryClient.setQueryData(userQueryKeys.me, { user: data.user });
+    },
+  });
+}
+
+export function useForgotPassword() {
+  return useMutation<{ message: string }, ApiClientError, { email: string }>({
+    mutationFn: (data) => api.forgotPassword(data),
+  });
+}
+
+export function useResetPassword() {
+  return useMutation<{ message: string }, ApiClientError, ResetPasswordRequest>({
+    mutationFn: (data) => api.resetPassword(data),
+  });
+}
+
+export function useUpdatePassword() {
+  return useMutation<{ message: string }, ApiClientError, UpdatePasswordRequest>({
+    mutationFn: (data) => api.updateUserPassword(data),
+  });
+}
+
+export function useMe() {
+  return useQuery<{ user: UserProfile }, ApiClientError>({
+    queryKey: userQueryKeys.me,
+    queryFn: () => api.getMe(),
+    enabled: isUserLoggedIn(),
+    retry: false,
+    staleTime: 1000 * 60 * 10,
+  });
+}
+
+// ============================================
+// User Progress Hooks
+// ============================================
+
+export function useMarkComplete() {
+  const queryClient = useQueryClient();
+  return useMutation<{ completedAt: string }, ApiClientError, string>({
+    mutationFn: (slug) => api.markPostComplete(slug),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: userQueryKeys.progress });
+      queryClient.invalidateQueries({ queryKey: userQueryKeys.stats });
+    },
+  });
+}
+
+export function useUnmarkComplete() {
+  const queryClient = useQueryClient();
+  return useMutation<{ message: string }, ApiClientError, string>({
+    mutationFn: (slug) => api.unmarkPostComplete(slug),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: userQueryKeys.progress });
+      queryClient.invalidateQueries({ queryKey: userQueryKeys.stats });
+    },
+  });
+}
+
+export function useUserProgress() {
+  return useQuery<{ completed: UserProgressItem[] }, ApiClientError>({
+    queryKey: userQueryKeys.progress,
+    queryFn: () => api.getUserProgress(),
+    enabled: isUserLoggedIn(),
+    staleTime: 1000 * 60 * 2,
+  });
+}
+
+export function useUserStats() {
+  return useQuery<UserStatsResponse, ApiClientError>({
+    queryKey: userQueryKeys.stats,
+    queryFn: () => api.getUserStats(),
+    enabled: isUserLoggedIn(),
+    staleTime: 1000 * 60 * 5,
   });
 }
 

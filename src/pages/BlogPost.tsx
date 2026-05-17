@@ -6,8 +6,10 @@ import Layout from "@/components/Layout";
 import Breadcrumb from "@/components/Breadcrumb";
 import BlogSidebar from "@/components/BlogSidebar";
 import SectionNav from "@/components/SectionNav";
-import { usePost, useAdjacentPosts } from "@/hooks/use-api";
-import { Loader2, ChevronLeft, ChevronRight } from "lucide-react";
+import { usePost, useAdjacentPosts, useMarkComplete, useUnmarkComplete, useUserProgress } from "@/hooks/use-api";
+import { useUserAuth } from "@/contexts/UserAuthContext";
+import { Loader2, ChevronLeft, ChevronRight, CheckCircle2, Circle } from "lucide-react";
+import { format } from "date-fns";
 
 /** Custom renderers for ReactMarkdown */
 const markdownComponents: Components = {
@@ -52,6 +54,13 @@ const BlogPost = () => {
   const { slug } = useParams<{ slug: string }>();
   const { data: post, isLoading, isError } = usePost(slug || "");
   const { prev, next } = useAdjacentPosts(slug || "", post?.sectionId);
+  const { isLoggedIn, openAuthModal } = useUserAuth();
+  const { data: progressData } = useUserProgress();
+  const markComplete = useMarkComplete();
+  const unmarkComplete = useUnmarkComplete();
+
+  const completedItem = progressData?.completed.find((c) => c.postSlug === slug);
+  const isCompleted = !!completedItem;
 
   if (isLoading) {
     return (
@@ -135,6 +144,44 @@ const BlogPost = () => {
               >
                 {post.content}
               </ReactMarkdown>
+            </div>
+
+            {/* Mark as Complete */}
+            <div className="mt-10 pt-6 border-t border-border/40 not-prose">
+              {isLoggedIn ? (
+                <button
+                  onClick={() =>
+                    isCompleted
+                      ? unmarkComplete.mutate(slug || "")
+                      : markComplete.mutate(slug || "")
+                  }
+                  disabled={markComplete.isPending || unmarkComplete.isPending}
+                  className={`flex items-center gap-2 text-sm px-4 py-2 rounded-lg border transition-all duration-200 ${
+                    isCompleted
+                      ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20"
+                      : "border-border/50 text-muted-foreground hover:border-primary/40 hover:text-primary"
+                  }`}
+                >
+                  {markComplete.isPending || unmarkComplete.isPending ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : isCompleted ? (
+                    <CheckCircle2 className="w-4 h-4" />
+                  ) : (
+                    <Circle className="w-4 h-4" />
+                  )}
+                  {isCompleted
+                    ? `Completed · ${format(new Date(completedItem!.completedAt), "MMM d, yyyy")}`
+                    : "Mark as Complete"}
+                </button>
+              ) : (
+                <button
+                  onClick={() => openAuthModal("login")}
+                  className="flex items-center gap-2 text-sm px-4 py-2 rounded-lg border border-border/50 text-muted-foreground/60 hover:text-muted-foreground transition-colors"
+                >
+                  <Circle className="w-4 h-4" />
+                  Sign in to track progress
+                </button>
+              )}
             </div>
 
             {/* Prev / Next navigation */}

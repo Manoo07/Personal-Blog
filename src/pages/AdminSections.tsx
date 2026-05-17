@@ -23,6 +23,7 @@ import {
   Link2Off,
   GripVertical,
   CornerUpLeft,
+  BarChart2,
 } from "lucide-react";
 import {
   useVerifyToken,
@@ -399,6 +400,7 @@ interface SectionRowProps {
   onUnassignPost: (postId: string) => Promise<void>;
   isPendingAssign: boolean;
   onPromoteToRoot: (id: string) => void;
+  onToggleInProgress: (id: string, current: boolean) => void;
 }
 
 const SectionRow = ({
@@ -429,6 +431,7 @@ const SectionRow = ({
   onUnassignPost,
   isPendingAssign,
   onPromoteToRoot,
+  onToggleInProgress,
 }: SectionRowProps) => {
   const isExpanded = expanded.has(node.id);
   const hasChildren = (node.children ?? []).length > 0 || addingChildOf === node.id;
@@ -548,6 +551,16 @@ const SectionRow = ({
               </button>
               <button
                 type="button"
+                onClick={() => onToggleInProgress(node.id, node.showInProgress ?? false)}
+                className={`p-1 rounded hover:bg-secondary transition-colors ${
+                  node.showInProgress ? "text-emerald-500" : "text-muted-foreground hover:text-foreground"
+                }`}
+                title={node.showInProgress ? "Remove from dashboard" : "Show in dashboard progress"}
+              >
+                <BarChart2 className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
                 onClick={() => onStartEdit(node.id)}
                 className="p-1 rounded hover:bg-secondary text-primary transition-colors"
                 title="Rename"
@@ -608,6 +621,7 @@ const SectionRow = ({
             onUnassignPost={onUnassignPost}
             isPendingAssign={isPendingAssign}
             onPromoteToRoot={onPromoteToRoot}
+            onToggleInProgress={onToggleInProgress}
           />
 
           {addingChildOf === node.id && (
@@ -656,6 +670,7 @@ interface DraggableSectionListProps {
   onUnassignPost: (postId: string) => Promise<void>;
   isPendingAssign: boolean;
   onPromoteToRoot: (id: string) => void;
+  onToggleInProgress: (id: string, current: boolean) => void;
 }
 
 const DraggableSectionList = ({
@@ -969,6 +984,10 @@ const AdminSections = () => {
     await updateMutation.mutateAsync({ id, data: { parentId: null } });
   };
 
+  const handleToggleInProgress = async (id: string, current: boolean) => {
+    await updateMutation.mutateAsync({ id, data: { showInProgress: !current } });
+  };
+
   const handleDelete = (id: string, name: string) => {
     const result = findNodeInTree(sections, id);
     const childrenCount = (result?.node.children ?? []).length;
@@ -1106,6 +1125,7 @@ const AdminSections = () => {
                     onUnassignPost={handleUnassignPost}
                     isPendingAssign={updatePostMutation.isPending}
                     onPromoteToRoot={handlePromoteToRoot}
+                    onToggleInProgress={handleToggleInProgress}
                   />
                 )}
 

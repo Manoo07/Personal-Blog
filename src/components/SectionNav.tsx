@@ -1,7 +1,7 @@
 import { useMemo, useState, useEffect, useRef, useCallback } from "react";
 import { Link, useParams, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
-import { useSectionTree } from "@/hooks/use-api";
+import { useSectionTree, useUserProgress } from "@/hooks/use-api";
 import {
   Folder,
   FolderOpen,
@@ -11,6 +11,7 @@ import {
   Loader2,
   PanelLeftOpen,
   X,
+  CheckCircle2,
 } from "lucide-react";
 import type { ApiSectionNode, SectionSummary } from "@/lib/api";
 
@@ -52,6 +53,7 @@ interface SectionNodeProps {
   depth: number;
   currentSlug?: string;
   activeSectionId?: string | null;
+  completedSlugs: Set<string>;
 }
 
 const SectionNodeItem = ({
@@ -59,6 +61,7 @@ const SectionNodeItem = ({
   depth,
   currentSlug,
   activeSectionId,
+  completedSlugs,
 }: SectionNodeProps) => {
   const allIds = useMemo(() => collectIds(node), [node]);
   const isAncestorOfActive =
@@ -74,6 +77,10 @@ const SectionNodeItem = ({
   const directPosts = node.posts ?? [];
   const hasChildren = (node.children?.length ?? 0) > 0;
   const hasContent = directPosts.length > 0 || hasChildren;
+
+  // Count completed posts in this section (direct only for badge)
+  const completedInSection = directPosts.filter((p) => completedSlugs.has(p.slug)).length;
+  const showBadge = completedInSection > 0 && directPosts.length > 0;
 
   if (!hasContent) return null;
 
@@ -126,8 +133,15 @@ const SectionNodeItem = ({
         {/* name — truncated with ellipsis; full title visible on hover via title attr */}
         <span className="leading-none max-w-[160px] truncate">{node.name}</span>
 
+        {/* progress badge */}
+        {showBadge && (
+          <span className="ml-auto shrink-0 text-[9px] tabular-nums text-emerald-500/80 font-medium">
+            {completedInSection}/{directPosts.length}
+          </span>
+        )}
+
         {/* collapsed indicator for non-active root sections */}
-        {!open && !isAncestorOfActive && depth === 0 && (
+        {!open && !isAncestorOfActive && !showBadge && depth === 0 && (
           <span className="ml-1 text-[10px] text-muted-foreground/30 shrink-0">···</span>
         )}
       </button>
@@ -143,6 +157,7 @@ const SectionNodeItem = ({
             <ul className="pl-1 py-0.5 space-y-0">
               {directPosts.map((post) => {
                 const isActive = post.slug === currentSlug;
+                const isDone = completedSlugs.has(post.slug);
                 return (
                   <li key={post.slug}>
                     <Link
@@ -159,6 +174,8 @@ const SectionNodeItem = ({
                     >
                       {isActive ? (
                         <ChevronRight className={cn("w-3 h-3 shrink-0", folderColor(depth, true))} />
+                      ) : isDone ? (
+                        <CheckCircle2 className="w-3 h-3 shrink-0 text-emerald-500/70" />
                       ) : (
                         <FileText className={cn("w-3 h-3 shrink-0", folderColor(depth, false))} />
                       )}
@@ -180,6 +197,7 @@ const SectionNodeItem = ({
                   depth={depth + 1}
                   currentSlug={currentSlug}
                   activeSectionId={activeSectionId}
+                  completedSlugs={completedSlugs}
                 />
               ))}
             </ul>
@@ -196,6 +214,12 @@ const SectionNav = ({ section }: SectionNavProps) => {
   const { slug: currentSlug } = useParams<{ slug: string }>();
   const location = useLocation();
   const { data: sectionData, isLoading } = useSectionTree();
+  const { data: progressData } = useUserProgress();
+
+  const completedSlugs = useMemo(
+    () => new Set((progressData?.completed ?? []).map((c) => c.postSlug)),
+    [progressData]
+  );
 
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -273,6 +297,7 @@ const SectionNav = ({ section }: SectionNavProps) => {
                 depth={0}
                 currentSlug={currentSlug}
                 activeSectionId={section?.id ?? null}
+                completedSlugs={completedSlugs}
               />
             ))}
           </ul>

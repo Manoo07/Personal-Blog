@@ -1,7 +1,15 @@
 import { Link, useLocation } from "react-router-dom";
 import { ReactNode, useState } from "react";
-import { Menu, X, Github, Linkedin } from "lucide-react";
+import { Menu, X, Github, Linkedin, LogOut, KeyRound, BarChart2 } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
+import { useUserAuth } from "@/contexts/UserAuthContext";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface LayoutProps {
   children: ReactNode;
@@ -22,6 +30,7 @@ const socialLinks = [
 const Layout = ({ children }: LayoutProps) => {
   const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const { currentUser, isLoggedIn, openAuthModal, logout } = useUserAuth();
 
   const toggleMobileMenu = () => {
     setIsMobileMenuOpen(!isMobileMenuOpen);
@@ -78,6 +87,55 @@ const Layout = ({ children }: LayoutProps) => {
                 );
               })}
               <ThemeToggle compact />
+
+              {/* User auth */}
+              {isLoggedIn && currentUser ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      className="w-7 h-7 rounded-full bg-primary/20 text-primary text-[11px] font-semibold flex items-center justify-center hover:bg-primary/30 transition-colors"
+                      aria-label="Account menu"
+                    >
+                      {currentUser.username.slice(0, 2).toUpperCase()}
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-44">
+                    <div className="px-2 py-1.5">
+                      <p className="text-xs font-medium truncate">{currentUser.username}</p>
+                      <p className="text-[11px] text-muted-foreground truncate">{currentUser.email}</p>
+                    </div>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem asChild>
+                      <Link to="/dashboard" className="flex items-center gap-2 cursor-pointer">
+                        <BarChart2 className="w-3.5 h-3.5" />
+                        My Progress
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => openAuthModal("change-password")}
+                      className="flex items-center gap-2 cursor-pointer"
+                    >
+                      <KeyRound className="w-3.5 h-3.5" />
+                      Change Password
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onClick={logout}
+                      className="flex items-center gap-2 cursor-pointer text-destructive focus:text-destructive"
+                    >
+                      <LogOut className="w-3.5 h-3.5" />
+                      Sign Out
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : (
+                <button
+                  onClick={() => openAuthModal("login")}
+                  className="text-xs text-muted-foreground hover:text-foreground border border-border/50 hover:border-border rounded-md px-2.5 py-1 transition-colors"
+                >
+                  Sign In
+                </button>
+              )}
             </div>
           </div>
 
@@ -131,6 +189,44 @@ const Layout = ({ children }: LayoutProps) => {
                   })}
                   <ThemeToggle compact={false} />
                 </div>
+              </div>
+
+              {/* Mobile user auth */}
+              <div className="pt-2 border-t border-border/50">
+                {isLoggedIn && currentUser ? (
+                  <div className="space-y-1">
+                    <div className="px-3 py-1.5">
+                      <p className="text-xs font-medium">{currentUser.username}</p>
+                      <p className="text-[11px] text-muted-foreground">{currentUser.email}</p>
+                    </div>
+                    <Link
+                      to="/dashboard"
+                      onClick={closeMobileMenu}
+                      className="flex items-center gap-2 py-2 px-3 rounded-md text-sm text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors"
+                    >
+                      <BarChart2 className="w-4 h-4" /> My Progress
+                    </Link>
+                    <button
+                      onClick={() => { closeMobileMenu(); openAuthModal("change-password"); }}
+                      className="w-full flex items-center gap-2 py-2 px-3 rounded-md text-sm text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors"
+                    >
+                      <KeyRound className="w-4 h-4" /> Change Password
+                    </button>
+                    <button
+                      onClick={() => { closeMobileMenu(); logout(); }}
+                      className="w-full flex items-center gap-2 py-2 px-3 rounded-md text-sm text-destructive hover:bg-destructive/10 transition-colors"
+                    >
+                      <LogOut className="w-4 h-4" /> Sign Out
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => { closeMobileMenu(); openAuthModal("login"); }}
+                    className="w-full py-2 px-3 rounded-md text-sm text-left text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors"
+                  >
+                    Sign In
+                  </button>
+                )}
               </div>
             </div>
           </div>

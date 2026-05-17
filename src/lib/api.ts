@@ -127,6 +127,7 @@ export interface ApiSection {
   description: string | null;
   order: number;
   parentId: string | null;
+  showInProgress: boolean;
   createdAt: string;
   updatedAt: string;
   _count?: {
@@ -179,6 +180,7 @@ export interface CreateSectionRequest {
   description?: string;
   parentId?: string | null;
   order?: number;
+  showInProgress?: boolean;
 }
 
 export interface UpdateSectionRequest {
@@ -187,6 +189,7 @@ export interface UpdateSectionRequest {
   description?: string;
   parentId?: string | null;
   order?: number;
+  showInProgress?: boolean;
 }
 
 export interface MovePostsRequest {
@@ -207,6 +210,108 @@ export interface ApiError {
 export interface UploadImageResponse {
   url: string;
 }
+
+// ============================================
+// User Types
+// ============================================
+
+export interface UserRegisterRequest {
+  email: string;
+  username: string;
+  password: string;
+}
+
+export interface UserVerifyEmailRequest {
+  email: string;
+  otp: string;
+}
+
+export interface UserLoginRequest {
+  email: string;
+  password: string;
+}
+
+export interface UserLoginResponse {
+  token: string;
+  user: { id: string; email: string; username: string };
+}
+
+export interface UserProfile {
+  id: string;
+  email: string;
+  username: string;
+  isVerified: boolean;
+  createdAt: string;
+}
+
+export interface ResetPasswordRequest {
+  email: string;
+  otp: string;
+  newPassword: string;
+}
+
+export interface UpdatePasswordRequest {
+  currentPassword: string;
+  newPassword: string;
+}
+
+export interface UserProgressItem {
+  postId: string;
+  postSlug: string;
+  postTitle: string;
+  sectionId: string | null;
+  completedAt: string;
+}
+
+export interface SectionStatPost {
+  postId: string;
+  postSlug: string;
+  postTitle: string;
+  isCompleted: boolean;
+}
+
+export interface SectionStatNode {
+  sectionId: string;
+  sectionName: string;
+  sectionSlug: string;
+  total: number;
+  completed: number;
+  posts: SectionStatPost[];
+  children: SectionStatNode[];
+}
+
+export interface UserStatsResponse {
+  totalPosts: number;
+  completedPosts: number;
+  completionPercent: number;
+  sections: SectionStatNode[];
+}
+
+// ── User token management (localStorage, separate from admin sessionStorage) ──
+
+const USER_TOKEN_KEY = "journal_user_token";
+const USER_DATA_KEY = "journal_user_data";
+
+export const getUserToken = (): string | null => localStorage.getItem(USER_TOKEN_KEY);
+
+export const setUserToken = (token: string): void =>
+  localStorage.setItem(USER_TOKEN_KEY, token);
+
+export const removeUserToken = (): void => {
+  localStorage.removeItem(USER_TOKEN_KEY);
+  localStorage.removeItem(USER_DATA_KEY);
+};
+
+export const isUserLoggedIn = (): boolean => !!getUserToken();
+
+export const getStoredUser = (): UserLoginResponse["user"] | null => {
+  const raw = localStorage.getItem(USER_DATA_KEY);
+  if (!raw) return null;
+  try { return JSON.parse(raw); } catch { return null; }
+};
+
+export const setStoredUser = (user: UserLoginResponse["user"]): void =>
+  localStorage.setItem(USER_DATA_KEY, JSON.stringify(user));
 
 // Token management
 const TOKEN_KEY = "journal_admin_token";
@@ -502,6 +607,81 @@ class ApiClient {
       method: "PUT",
       body: JSON.stringify(data),
     });
+  }
+
+  // ============================================
+  // User Auth (uses user JWT, not admin JWT)
+  // ============================================
+
+  private async userRequest<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+    const url = `${this.baseUrl}${endpoint}`;
+    const token = getUserToken();
+    const headers: HeadersInit = { "Content-Type": "application/json", ...options.headers };
+    if (token) (headers as Record<string, string>)["Authorization"] = `Bearer ${token}`;
+    const response = await fetch(url, { ...options, headers });
+    if (!response.ok) {
+      const errorData: ApiError = await response.json().catch(() => ({ error: "Unexpected error" }));
+      throw new ApiClientError(errorData.error, response.status, errorData.code, errorData.details);
+    }
+    return response.json();
+  }
+
+  async registerUser(data: UserRegisterRequest): Promise<{ message: string }> {
+    return this.request("/api/user/auth/register", { method: "POST", body: JSON.stringify(data) });
+  }
+
+  async verifyUserEmail(data: UserVerifyEmailRequest): Promise<{ message: string }> {
+    return this.request("/api/user/auth/verify-email", { method: "POST", body: JSON.stringify(data) });
+  }
+
+  async loginUser(data: UserLoginRequest): Promise<UserLoginResponse> {
+    const res = await this.request<UserLoginResponse>("/api/user/auth/login", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+    setUserToken(res.token);
+    setStoredUser(res.user);
+    return res;
+  }
+
+  async forgotPassword(data: { email: string }): Promise<{ message: string }> {
+    return this.request("/api/user/auth/forgot-password", { method: "POST", body: JSON.stringify(data) });
+  }
+
+  async resetPassword(data: ResetPasswordRequest): Promise<{ message: string }> {
+    return this.request("/api/user/auth/reset-password", { method: "POST", body: JSON.stringify(data) });
+  }
+
+  async updateUserPassword(data: UpdatePasswordRequest): Promise<{ message: string }> {
+    return this.userRequest("/api/user/auth/password", { method: "PUT", body: JSON.stringify(data) });
+  }
+
+  async getMe(): Promise<{ user: UserProfile }> {
+    return this.userRequest("/api/user/auth/me");
+  }
+
+  logoutUser(): void {
+    removeUserToken();
+  }
+
+  // ============================================
+  // User Progress
+  // ============================================
+
+  async markPostComplete(postSlug: string): Promise<{ completedAt: string }> {
+    return this.userRequest(`/api/user/progress/${postSlug}`, { method: "POST" });
+  }
+
+  async unmarkPostComplete(postSlug: string): Promise<{ message: string }> {
+    return this.userRequest(`/api/user/progress/${postSlug}`, { method: "DELETE" });
+  }
+
+  async getUserProgress(): Promise<{ completed: UserProgressItem[] }> {
+    return this.userRequest("/api/user/progress");
+  }
+
+  async getUserStats(): Promise<UserStatsResponse> {
+    return this.userRequest("/api/user/progress/stats");
   }
 
   async uploadImage(file: File): Promise<UploadImageResponse> {
