@@ -48,6 +48,8 @@ const Admin = () => {
   const [showPreview, setShowPreview] = useState(false);
   const [view, setView] = useState<View>("list");
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [adminPage, setAdminPage] = useState(0);
+  const POSTS_PER_PAGE = 15;
   const contentTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   
@@ -60,8 +62,9 @@ const Admin = () => {
   const { data: authData, isLoading: isVerifying, error: authError } = useVerifyToken();
   const loginMutation = useLogin();
   const logoutMutation = useLogout();
-  const { data: postsData, isLoading: isLoadingPosts, refetch: refetchPosts } = useAdminPosts({
-    limit: 100,
+  const { data: postsData, isLoading: isLoadingPosts } = useAdminPosts({
+    limit: POSTS_PER_PAGE,
+    offset: adminPage * POSTS_PER_PAGE,
     sort: "createdAt",
     order: "desc",
   });
@@ -649,7 +652,7 @@ const Admin = () => {
         {/* Posts list */}
         {!isLoadingPosts && (
           <div className="animate-fade-in">
-            {posts.length === 0 ? (
+            {posts.length === 0 && adminPage === 0 ? (
               <div className="text-center py-12 text-muted-foreground">
                 <FileText className="w-12 h-12 mx-auto mb-3 opacity-50" />
                 <p>No posts yet. Create your first post!</p>
@@ -775,6 +778,30 @@ const Admin = () => {
                 );
               });
             })()}
+
+            {/* Pagination controls */}
+            {postsData && postsData.pagination.total > POSTS_PER_PAGE && (
+              <div className="flex items-center justify-between mt-6 pt-4 border-t border-border/40">
+                <button
+                  onClick={() => setAdminPage((p) => Math.max(0, p - 1))}
+                  disabled={adminPage === 0}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-border/40 text-sm text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors disabled:opacity-30"
+                >
+                  ← Previous
+                </button>
+                <span className="text-sm text-muted-foreground tabular-nums">
+                  Page {adminPage + 1} of {Math.ceil(postsData.pagination.total / POSTS_PER_PAGE)}
+                  <span className="ml-2 text-xs opacity-60">({postsData.pagination.total} posts)</span>
+                </span>
+                <button
+                  onClick={() => setAdminPage((p) => p + 1)}
+                  disabled={!postsData.pagination.hasMore}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-border/40 text-sm text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors disabled:opacity-30"
+                >
+                  Next →
+                </button>
+              </div>
+            )}
           </div>
         )}
       </section>
