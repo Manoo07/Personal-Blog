@@ -165,42 +165,53 @@ const InlineEditor = ({
 
 interface PostAssignPanelProps {
   sectionId: string;
-  allPosts: ApiPostSummary[];
+  assignedPosts: ApiPostSummary[];
   onAssign: (postId: string, sectionId: string) => Promise<void>;
   onUnassign: (postId: string) => Promise<void>;
   isPending: boolean;
 }
 
+const POSTS_PER_PAGE = 10;
+
 const PostAssignPanel = ({
   sectionId,
-  allPosts,
+  assignedPosts,
   onAssign,
   onUnassign,
   isPending,
 }: PostAssignPanelProps) => {
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(0);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    searchRef.current?.focus();
-  }, []);
+  useEffect(() => { searchRef.current?.focus(); }, []);
+  useEffect(() => { setPage(0); }, [search]);
 
-  const assigned = useMemo(
-    () => allPosts.filter((p) => p.sectionId === sectionId),
-    [allPosts, sectionId]
+  const { data: postsData, isLoading: isLoadingPosts } = useAdminPosts({
+    limit: POSTS_PER_PAGE,
+    offset: page * POSTS_PER_PAGE,
+    sort: "title",
+    order: "asc",
+  });
+
+  const assignedIds = useMemo(
+    () => new Set(assignedPosts.map((p) => p.id)),
+    [assignedPosts]
   );
 
   const q = search.toLowerCase().trim();
   const suggestions = useMemo(
     () =>
-      allPosts.filter(
+      (postsData?.posts ?? []).filter(
         (p) =>
-          p.sectionId !== sectionId &&
+          !assignedIds.has(p.id) &&
           (q === "" || p.title.toLowerCase().includes(q) || p.tags.some((t) => t.includes(q)))
       ),
-    [allPosts, sectionId, q]
+    [postsData, assignedIds, q]
   );
+
+  const totalPages = postsData ? Math.ceil(postsData.pagination.total / POSTS_PER_PAGE) : 1;
 
   const handleAssign = async (postId: string) => {
     setPendingId(postId);
@@ -216,13 +227,14 @@ const PostAssignPanel = ({
 
   return (
     <div className="mt-1 mb-2 rounded-md border border-border/50 bg-background/60 overflow-hidden">
-      {assigned.length > 0 && (
+      {/* Assigned posts (from section tree — always accurate) */}
+      {assignedPosts.length > 0 && (
         <div className="px-3 pt-2.5 pb-1.5">
           <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">
-            Assigned ({assigned.length})
+            Assigned ({assignedPosts.length})
           </p>
           <div className="flex flex-col gap-0.5">
-            {assigned.map((post) => (
+            {assignedPosts.map((post) => (
               <div
                 key={post.id}
                 className="flex items-center justify-between gap-2 px-2 py-1 rounded hover:bg-secondary/60 group transition-colors"
@@ -231,10 +243,7 @@ const PostAssignPanel = ({
                   <FileText className="w-3 h-3 text-primary shrink-0" />
                   <span className="text-sm text-foreground truncate">{post.title}</span>
                   {post.tags.slice(0, 2).map((tag) => (
-                    <span
-                      key={tag}
-                      className="hidden sm:inline text-[10px] font-mono px-1 py-0.5 rounded bg-secondary text-muted-foreground shrink-0"
-                    >
+                    <span key={tag} className="hidden sm:inline text-[10px] font-mono px-1 py-0.5 rounded bg-secondary text-muted-foreground shrink-0">
                       {tag}
                     </span>
                   ))}
@@ -258,8 +267,9 @@ const PostAssignPanel = ({
         </div>
       )}
 
-      {assigned.length > 0 && <div className="border-t border-border/40 mx-3" />}
+      {assignedPosts.length > 0 && <div className="border-t border-border/40 mx-3" />}
 
+      {/* Paginated suggestions */}
       <div className="px-3 pt-2 pb-2.5">
         <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">
           Add posts
@@ -271,7 +281,7 @@ const PostAssignPanel = ({
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search posts by title or tag…"
+            placeholder="Filter by title or tag…"
             className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
           />
           {search && (
@@ -282,9 +292,13 @@ const PostAssignPanel = ({
         </div>
 
         <div className="max-h-40 overflow-y-auto flex flex-col gap-0.5">
-          {suggestions.length === 0 ? (
+          {isLoadingPosts ? (
+            <div className="flex items-center justify-center py-4">
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />
+            </div>
+          ) : suggestions.length === 0 ? (
             <p className="text-xs text-muted-foreground py-2 text-center">
-              {q ? "No matching posts found." : "All posts are already assigned."}
+              {q ? "No matches on this page." : "No posts to assign on this page."}
             </p>
           ) : (
             suggestions.map((post) => (
@@ -295,16 +309,13 @@ const PostAssignPanel = ({
                 <div className="flex items-center gap-1.5 min-w-0">
                   <FileText className="w-3 h-3 text-muted-foreground shrink-0" />
                   <span className="text-sm text-foreground truncate">{post.title}</span>
-                  {post.sectionId && (
+                  {post.section && (
                     <span className="hidden sm:inline text-[10px] font-mono px-1 py-0.5 rounded bg-primary/10 text-primary shrink-0">
-                      in other section
+                      {post.section.name}
                     </span>
                   )}
-                  {post.tags.slice(0, 2).map((tag) => (
-                    <span
-                      key={tag}
-                      className="hidden sm:inline text-[10px] font-mono px-1 py-0.5 rounded bg-secondary text-muted-foreground shrink-0"
-                    >
+                  {post.tags.slice(0, 1).map((tag) => (
+                    <span key={tag} className="hidden sm:inline text-[10px] font-mono px-1 py-0.5 rounded bg-secondary text-muted-foreground shrink-0">
                       {tag}
                     </span>
                   ))}
@@ -326,6 +337,31 @@ const PostAssignPanel = ({
             ))
           )}
         </div>
+
+        {/* Page navigation */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between mt-2 pt-1.5 border-t border-border/30">
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.max(0, p - 1))}
+              disabled={page === 0}
+              className="text-xs px-2 py-0.5 rounded border border-border disabled:opacity-30 hover:bg-secondary transition-colors text-muted-foreground"
+            >
+              ← Prev
+            </button>
+            <span className="text-[11px] text-muted-foreground tabular-nums">
+              {page + 1} / {totalPages}
+            </span>
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+              disabled={page >= totalPages - 1}
+              className="text-xs px-2 py-0.5 rounded border border-border disabled:opacity-30 hover:bg-secondary transition-colors text-muted-foreground"
+            >
+              Next →
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -357,7 +393,6 @@ interface SectionRowProps {
   onMoveTo: (draggedId: string, targetId: string, zone: DropZone) => Promise<void>;
   isReordering: boolean;
   // Post assignment
-  allPosts: ApiPostSummary[];
   assigningPostsOf: string | null;
   onStartAssignPosts: (id: string) => void;
   onAssignPost: (postId: string, sectionId: string) => Promise<void>;
@@ -388,7 +423,6 @@ const SectionRow = ({
   onReorder,
   onMoveTo,
   isReordering,
-  allPosts,
   assigningPostsOf,
   onStartAssignPosts,
   onAssignPost,
@@ -400,7 +434,7 @@ const SectionRow = ({
   const hasChildren = (node.children ?? []).length > 0 || addingChildOf === node.id;
   const isEditing = editingId === node.id;
   const isAssigning = assigningPostsOf === node.id;
-  const assignedCount = allPosts.filter((p) => p.sectionId === node.id).length;
+  const assignedCount = node.posts?.length ?? 0;
 
   return (
     <div className="relative">
@@ -538,7 +572,7 @@ const SectionRow = ({
         <div style={{ paddingLeft: `${8 + (depth + 1) * 20}px`, paddingRight: "8px" }}>
           <PostAssignPanel
             sectionId={node.id}
-            allPosts={allPosts}
+            assignedPosts={node.posts ?? []}
             onAssign={onAssignPost}
             onUnassign={onUnassignPost}
             isPending={isPendingAssign}
@@ -568,7 +602,6 @@ const SectionRow = ({
             isPendingEdit={isPendingEdit}
             isPendingChild={isPendingChild}
             onMoveSection={onMoveSection}
-            allPosts={allPosts}
             assigningPostsOf={assigningPostsOf}
             onStartAssignPosts={onStartAssignPosts}
             onAssignPost={onAssignPost}
@@ -617,7 +650,6 @@ interface DraggableSectionListProps {
   isPendingEdit: boolean;
   isPendingChild: boolean;
   onMoveSection: (id: string, direction: "up" | "down", siblings: ApiSectionNode[]) => void;
-  allPosts: ApiPostSummary[];
   assigningPostsOf: string | null;
   onStartAssignPosts: (id: string) => void;
   onAssignPost: (postId: string, sectionId: string) => Promise<void>;
@@ -785,7 +817,6 @@ const AdminSections = () => {
   const isAuth = hasToken && authData?.valid;
 
   const { data: sectionData, isLoading: isLoadingSections } = useSectionTree();
-  const { data: postsData } = useAdminPosts({ limit: 100, sort: "createdAt", order: "desc" });
   const logoutMutation = useLogout();
   const createMutation = useCreateSection();
   const updateMutation = useUpdateSection();
@@ -794,7 +825,6 @@ const AdminSections = () => {
   const updatePostMutation = useUpdatePost();
 
   const sections = sectionData?.sections ?? [];
-  const allPosts = useMemo(() => postsData?.posts ?? [], [postsData]);
 
   const handleLogout = () => {
     logoutMutation.mutate();
@@ -1070,7 +1100,6 @@ const AdminSections = () => {
                     isPendingEdit={updateMutation.isPending}
                     isPendingChild={createMutation.isPending}
                     onMoveSection={handleMoveSection}
-                    allPosts={allPosts}
                     assigningPostsOf={assigningPostsOf}
                     onStartAssignPosts={handleStartAssignPosts}
                     onAssignPost={handleAssignPost}
