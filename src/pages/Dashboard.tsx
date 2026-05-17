@@ -10,7 +10,6 @@ import {
   Lock,
   ChevronRight,
   ChevronDown,
-  Circle,
   FileText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -171,11 +170,16 @@ export default function Dashboard() {
     );
   }
 
+  const totalSections = statsData?.sections.length ?? 0;
+  const completedSections = statsData?.sections.filter(
+    (s) => s.total > 0 && s.completed === s.total
+  ).length ?? 0;
+
   return (
     <Layout>
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-10 space-y-10">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 py-10">
         {/* Header */}
-        <div>
+        <div className="mb-8">
           <h1 className="text-2xl font-bold tracking-tight">Learning Progress</h1>
           <p className="text-sm text-muted-foreground mt-1">
             Welcome back,{" "}
@@ -184,35 +188,65 @@ export default function Dashboard() {
         </div>
 
         {isLoading ? (
-          <div className="flex justify-center py-16">
+          <div className="flex justify-center py-32">
             <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
           </div>
         ) : (
-          <>
-            {/* Overall progress */}
-            {statsData && (
-              <section className="rounded-xl border border-border/50 bg-card p-6 space-y-4">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
-                    Overall
-                  </h2>
-                  <span className="text-2xl font-bold tabular-nums">
-                    {statsData.completionPercent}%
-                  </span>
-                </div>
-                <Progress value={statsData.completionPercent} className="h-2" />
-                <p className="text-xs text-muted-foreground">
-                  {statsData.completedPosts} of {statsData.totalPosts} published posts completed
-                </p>
-              </section>
-            )}
+          <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-8 items-start">
+            {/* ── Left sidebar ── */}
+            <div className="space-y-4 lg:sticky lg:top-20">
+              {statsData && (
+                <>
+                  {/* Overall progress card */}
+                  <div className="rounded-xl border border-border/50 bg-card p-6 space-y-5">
+                    <div>
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+                        Overall
+                      </p>
+                      <div className="flex items-end justify-between gap-2 mb-3">
+                        <span className="text-4xl font-bold tabular-nums leading-none">
+                          {statsData.completionPercent}%
+                        </span>
+                        <span className="text-sm text-muted-foreground pb-0.5">complete</span>
+                      </div>
+                      <Progress value={statsData.completionPercent} className="h-2" />
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {statsData.completedPosts} of {statsData.totalPosts} published posts completed
+                    </p>
+                  </div>
 
-            {/* Sections with inline posts */}
-            {statsData && statsData.sections.length > 0 && (
-              <section className="space-y-3">
-                <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
-                  By Section
-                </h2>
+                  {/* Summary stats */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="rounded-lg border border-border/40 bg-card/60 p-4 space-y-1">
+                      <p className="text-2xl font-bold tabular-nums">{statsData.completedPosts}</p>
+                      <p className="text-xs text-muted-foreground">Posts done</p>
+                    </div>
+                    <div className="rounded-lg border border-border/40 bg-card/60 p-4 space-y-1">
+                      <p className="text-2xl font-bold tabular-nums">
+                        {statsData.totalPosts - statsData.completedPosts}
+                      </p>
+                      <p className="text-xs text-muted-foreground">Posts left</p>
+                    </div>
+                    <div className="rounded-lg border border-border/40 bg-card/60 p-4 space-y-1">
+                      <p className="text-2xl font-bold tabular-nums">{completedSections}</p>
+                      <p className="text-xs text-muted-foreground">Sections done</p>
+                    </div>
+                    <div className="rounded-lg border border-border/40 bg-card/60 p-4 space-y-1">
+                      <p className="text-2xl font-bold tabular-nums">{totalSections}</p>
+                      <p className="text-xs text-muted-foreground">Total sections</p>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* ── Right: section tree ── */}
+            <div className="space-y-3 min-w-0">
+              <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+                By Section
+              </h2>
+              {statsData && statsData.sections.length > 0 ? (
                 <div className="space-y-2">
                   {statsData.sections.map((s) => (
                     <SectionAccordion
@@ -223,9 +257,11 @@ export default function Dashboard() {
                     />
                   ))}
                 </div>
-              </section>
-            )}
-          </>
+              ) : (
+                <p className="text-sm text-muted-foreground py-8">No sections to display.</p>
+              )}
+            </div>
+          </div>
         )}
       </div>
     </Layout>
