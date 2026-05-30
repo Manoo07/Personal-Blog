@@ -22,7 +22,7 @@ import {
   useReorderPosts,
   useSectionTree,
 } from "@/hooks/use-api";
-import { isAuthenticated, getToken } from "@/lib/api";
+import { isAuthenticated, getToken, api } from "@/lib/api";
 import type { ApiPost, CreatePostRequest, UpdatePostRequest } from "@/lib/api";
 
 type View = "list" | "edit";
@@ -189,7 +189,11 @@ const Admin = () => {
     order: 0,
   };
 
-  const handleEdit = (post: ApiPost | typeof posts[number]) => {
+  const handleEdit = async (post: ApiPost | typeof posts[number]) => {
+    setIsCreating(false);
+    setShowPreview(false);
+    setView("edit");
+    // Populate with what we have immediately so the form opens
     setEditingPost({
       id: post.id,
       slug: post.slug,
@@ -203,9 +207,23 @@ const Admin = () => {
       sectionId: (post as any).sectionId ?? null,
       order: post.order ?? 0,
     });
-    setIsCreating(false);
-    setShowPreview(false);
-    setView("edit");
+    // If the list entry lacks content (ApiPostSummary), fetch the full post
+    if (!("content" in post)) {
+      const fullPost = await api.getAdminPostById(post.id);
+      setEditingPost({
+        id: fullPost.id,
+        slug: fullPost.slug,
+        title: fullPost.title,
+        excerpt: fullPost.excerpt,
+        content: fullPost.content,
+        tags: fullPost.tags,
+        coverImage: fullPost.coverImage || "",
+        status: fullPost.status,
+        readingTime: fullPost.readingTime,
+        sectionId: fullPost.sectionId ?? null,
+        order: fullPost.order ?? 0,
+      });
+    }
   };
 
   const handleCreate = () => {
