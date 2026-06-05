@@ -477,98 +477,43 @@
 /* ── In-article note highlights ─────────────────────────────── */
 
 mark.note-highlight {
-  border-radius: 2px;
-  padding: 0;
+  border-radius: 3px;
+  padding: 1px 2px;
   cursor: pointer;
-  transition: background 0.15s;
+  transition: filter 0.15s;
 }
+mark.note-highlight:hover { filter: brightness(0.91); }
 
-/* ── Light mode colours ── */
+/* ──────────────────────────────────────────────────────────────
+   Light theme  (pastel backgrounds + dark text, per palette)
+────────────────────────────────────────────────────────────── */
 mark.note-highlight,
-mark.note-highlight[data-color="yellow"] {
-  background: rgba(254, 240, 138, 0.55);
-  border-bottom: 1.5px solid rgba(202, 138, 4, 0.55);
-}
-mark.note-highlight:hover,
-mark.note-highlight[data-color="yellow"]:hover { background: rgba(254, 240, 138, 0.85); }
+mark.note-highlight[data-color="yellow"]  { background: #fef08a; color: #713f12; border-bottom: 1.5px solid #ca8a04; }
+mark.note-highlight[data-color="indigo"]  { background: #e0e7ff; color: #3730a3; border-bottom: 1.5px solid #6366f1; }
+mark.note-highlight[data-color="sky"]     { background: #bae6fd; color: #0c4a6e; border-bottom: 1.5px solid #0ea5e9; }
+mark.note-highlight[data-color="emerald"] { background: #bbf7d0; color: #14532d; border-bottom: 1.5px solid #16a34a; }
+mark.note-highlight[data-color="orange"]  { background: #fed7aa; color: #7c2d12; border-bottom: 1.5px solid #f97316; }
+mark.note-highlight[data-color="violet"]  { background: #e9d5ff; color: #581c87; border-bottom: 1.5px solid #a855f7; }
 
-mark.note-highlight[data-color="indigo"] {
-  background: rgba(224, 231, 255, 0.7);
-  border-bottom: 1.5px solid rgba(99, 102, 241, 0.55);
-}
-mark.note-highlight[data-color="indigo"]:hover { background: rgba(224, 231, 255, 0.95); }
-
-mark.note-highlight[data-color="sky"] {
-  background: rgba(186, 230, 253, 0.7);
-  border-bottom: 1.5px solid rgba(14, 165, 233, 0.55);
-}
-mark.note-highlight[data-color="sky"]:hover { background: rgba(186, 230, 253, 0.95); }
-
-mark.note-highlight[data-color="emerald"] {
-  background: rgba(187, 247, 208, 0.7);
-  border-bottom: 1.5px solid rgba(22, 163, 74, 0.55);
-}
-mark.note-highlight[data-color="emerald"]:hover { background: rgba(187, 247, 208, 0.95); }
-
-mark.note-highlight[data-color="orange"] {
-  background: rgba(254, 215, 170, 0.7);
-  border-bottom: 1.5px solid rgba(249, 115, 22, 0.55);
-}
-mark.note-highlight[data-color="orange"]:hover { background: rgba(254, 215, 170, 0.95); }
-
-mark.note-highlight[data-color="violet"] {
-  background: rgba(233, 213, 255, 0.7);
-  border-bottom: 1.5px solid rgba(168, 85, 247, 0.55);
-}
-mark.note-highlight[data-color="violet"]:hover { background: rgba(233, 213, 255, 0.95); }
-
-/* ── Dark mode overrides ── */
+/* ──────────────────────────────────────────────────────────────
+   Dark theme  (vibrant backgrounds + light text, per palette)
+────────────────────────────────────────────────────────────── */
 .dark mark.note-highlight,
-.dark mark.note-highlight[data-color="yellow"] {
-  background: rgba(250, 204, 21, 0.2);
-  border-bottom-color: rgba(234, 179, 8, 0.6);
-}
-.dark mark.note-highlight:hover,
-.dark mark.note-highlight[data-color="yellow"]:hover { background: rgba(250, 204, 21, 0.45); }
+.dark mark.note-highlight[data-color="yellow"]  { background: #fef08a; color: #713f12; border-bottom: 1.5px solid #ca8a04; }
+.dark mark.note-highlight[data-color="indigo"]  { background: #4f46e5; color: #c7d2fe; border-bottom: 1.5px solid rgba(199,210,254,0.4); }
+.dark mark.note-highlight[data-color="sky"]     { background: #0ea5e9; color: #e0f2fe; border-bottom: 1.5px solid rgba(224,242,254,0.4); }
+.dark mark.note-highlight[data-color="emerald"] { background: #16a34a; color: #dcfce7; border-bottom: 1.5px solid rgba(220,252,231,0.4); }
+.dark mark.note-highlight[data-color="orange"]  { background: #f97316; color: #fff7ed; border-bottom: 1.5px solid rgba(255,247,237,0.4); }
+.dark mark.note-highlight[data-color="violet"]  { background: #a855f7; color: #f3e8ff; border-bottom: 1.5px solid rgba(243,232,255,0.4); }
 
-.dark mark.note-highlight[data-color="indigo"] {
-  background: rgba(79, 70, 229, 0.3);
-  border-bottom-color: rgba(199, 210, 254, 0.5);
-}
-.dark mark.note-highlight[data-color="indigo"]:hover { background: rgba(79, 70, 229, 0.52); }
-
-.dark mark.note-highlight[data-color="sky"] {
-  background: rgba(14, 165, 233, 0.25);
-  border-bottom-color: rgba(224, 242, 254, 0.5);
-}
-.dark mark.note-highlight[data-color="sky"]:hover { background: rgba(14, 165, 233, 0.48); }
-
-.dark mark.note-highlight[data-color="emerald"] {
-  background: rgba(22, 163, 74, 0.25);
-  border-bottom-color: rgba(220, 252, 231, 0.5);
-}
-.dark mark.note-highlight[data-color="emerald"]:hover { background: rgba(22, 163, 74, 0.48); }
-
-.dark mark.note-highlight[data-color="orange"] {
-  background: rgba(249, 115, 22, 0.25);
-  border-bottom-color: rgba(255, 247, 237, 0.5);
-}
-.dark mark.note-highlight[data-color="orange"]:hover { background: rgba(249, 115, 22, 0.48); }
-
-.dark mark.note-highlight[data-color="violet"] {
-  background: rgba(168, 85, 247, 0.25);
-  border-bottom-color: rgba(243, 232, 255, 0.5);
-}
-.dark mark.note-highlight[data-color="violet"]:hover { background: rgba(168, 85, 247, 0.48); }
-
-/* Highlight-only (no note attached) — dashed underline */
+/* Highlight-only (no note): dashed underline — must come AFTER colour rules
+   so border-bottom-style: dashed overrides the solid set above               */
 mark.note-highlight-only { border-bottom-style: dashed; }
 
-/* Pulse animation when navigating from sidebar — color-agnostic ring */
+/* Pulse animation — color-agnostic warm ring */
 @keyframes note-pulse {
   0%   { box-shadow: 0 0 0 0 transparent; }
-  25%  { box-shadow: 0 0 0 3px rgba(250, 204, 21, 0.55); }
+  25%  { box-shadow: 0 0 0 3px rgba(250, 204, 21, 0.6); }
   100% { box-shadow: 0 0 0 0 transparent; }
 }
-
 mark.note-highlight-pulse { animation: note-pulse 1.6s ease-out; }
