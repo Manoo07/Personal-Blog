@@ -27,6 +27,19 @@ interface NotePopover {
   mode: PopoverMode;
 }
 
+// ── Colour palette ────────────────────────────────────────────────────────────
+
+const COLOR_PALETTE = [
+  { key: "yellow",  swatch: "#eab308", label: "Yellow"  },
+  { key: "indigo",  swatch: "#6366f1", label: "Indigo"  },
+  { key: "sky",     swatch: "#38bdf8", label: "Sky"     },
+  { key: "emerald", swatch: "#4ade80", label: "Emerald" },
+  { key: "orange",  swatch: "#fb923c", label: "Orange"  },
+  { key: "violet",  swatch: "#c084fc", label: "Violet"  },
+] as const;
+
+type ColorKey = typeof COLOR_PALETTE[number]["key"];
+
 // ── DOM helpers ───────────────────────────────────────────────────────────────
 
 function clearHighlights(container: HTMLElement) {
@@ -50,6 +63,7 @@ function applyHighlight(container: HTMLElement, note: ApiNote) {
       range.setEnd(node, idx + note.selectedText.length);
       const mark = document.createElement("mark");
       mark.dataset.noteId = note.id;
+      mark.dataset.color = note.color || "yellow";
       mark.className = `note-highlight ${note.note ? "note-has-note" : "note-highlight-only"}`;
       range.surroundContents(mark);
     } catch { /* spans multiple nodes */ }
@@ -85,6 +99,7 @@ const PostNotes = ({ postSlug, articleRef }: Props) => {
   const [noteText, setNoteText] = useState("");
   const [popover, setPopover] = useState<NotePopover | null>(null);
   const [editText, setEditText] = useState("");
+  const [selectedColor, setSelectedColor] = useState<ColorKey>("yellow");
 
   const actionMenuRef = useRef<HTMLDivElement>(null);
   const inputPanelRef = useRef<HTMLDivElement>(null);
@@ -205,7 +220,7 @@ const PostNotes = ({ postSlug, articleRef }: Props) => {
   const handleHighlightOnly = async () => {
     if (!anchor) return;
     try {
-      await createNote.mutateAsync({ selectedText: anchor.text, note: null });
+      await createNote.mutateAsync({ selectedText: anchor.text, note: null, color: selectedColor });
       toast.success("Highlighted");
       dismissAnchor();
     } catch { toast.error("Failed to save highlight"); }
@@ -215,7 +230,7 @@ const PostNotes = ({ postSlug, articleRef }: Props) => {
   const handleSaveNew = async () => {
     if (!anchor || !noteText.trim()) return;
     try {
-      await createNote.mutateAsync({ selectedText: anchor.text, note: noteText.trim() });
+      await createNote.mutateAsync({ selectedText: anchor.text, note: noteText.trim(), color: selectedColor });
       toast.success("Note saved");
       dismissAnchor();
     } catch { toast.error("Failed to save note"); }
@@ -271,41 +286,62 @@ const PostNotes = ({ postSlug, articleRef }: Props) => {
         <div
           ref={actionMenuRef}
           style={{ position: "fixed", top: anchorPos!.top, left: anchorPos!.left, zIndex: 50 }}
-          className="flex items-center gap-1 rounded-lg border border-border bg-card shadow-xl p-1"
+          className="flex flex-col gap-1.5 rounded-lg border border-border bg-card shadow-xl p-2"
         >
-          <button
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={handleHighlightOnly}
-            disabled={createNote.isPending}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium text-foreground hover:bg-muted transition-colors disabled:opacity-50"
-            title="Highlight without a note"
-          >
-            {createNote.isPending
-              ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              : <Highlighter className="w-3.5 h-3.5 text-amber-500" />}
-            Highlight
-          </button>
+          {/* Colour picker row */}
+          <div className="flex items-center justify-between gap-1 px-0.5">
+            {COLOR_PALETTE.map((c) => (
+              <button
+                key={c.key}
+                title={c.label}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={(e) => { e.stopPropagation(); setSelectedColor(c.key); }}
+                style={{ backgroundColor: c.swatch }}
+                className={`w-4 h-4 rounded-full border-2 transition-transform flex-shrink-0 ${
+                  selectedColor === c.key
+                    ? "border-foreground/60 scale-110"
+                    : "border-transparent hover:scale-110 hover:border-foreground/30"
+                }`}
+              />
+            ))}
+          </div>
 
-          <div className="w-px h-4 bg-border/60" />
+          {/* Action buttons row */}
+          <div className="flex items-center gap-1">
+            <button
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={handleHighlightOnly}
+              disabled={createNote.isPending}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium text-foreground hover:bg-muted transition-colors disabled:opacity-50"
+              title="Highlight without a note"
+            >
+              {createNote.isPending
+                ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                : <Highlighter className="w-3.5 h-3.5 text-amber-500" />}
+              Highlight
+            </button>
 
-          <button
-            ref={addBtnRef}
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => setCreatingNote(true)}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium text-foreground hover:bg-muted transition-colors"
-            title="Highlight and add a note"
-          >
-            <MessageSquarePlus className="w-3.5 h-3.5 text-primary" />
-            Add Note
-          </button>
+            <div className="w-px h-4 bg-border/60" />
 
-          <button
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={dismissAnchor}
-            className="p-1.5 rounded-md hover:bg-muted transition-colors"
-          >
-            <X className="w-3 h-3 text-muted-foreground" />
-          </button>
+            <button
+              ref={addBtnRef}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => setCreatingNote(true)}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium text-foreground hover:bg-muted transition-colors"
+              title="Highlight and add a note"
+            >
+              <MessageSquarePlus className="w-3.5 h-3.5 text-primary" />
+              Add Note
+            </button>
+
+            <button
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={dismissAnchor}
+              className="p-1.5 rounded-md hover:bg-muted transition-colors"
+            >
+              <X className="w-3 h-3 text-muted-foreground" />
+            </button>
+          </div>
         </div>
       )}
 
@@ -319,6 +355,24 @@ const PostNotes = ({ postSlug, articleRef }: Props) => {
           <p className="text-[10px] text-muted-foreground italic line-clamp-2 border-l-2 border-amber-400/60 pl-2 leading-snug">
             "{anchor.text}"
           </p>
+          <div className="flex items-center gap-2">
+            <span className="text-[9px] text-muted-foreground/50 uppercase tracking-wide flex-shrink-0">Color</span>
+            <div className="flex items-center gap-1.5">
+              {COLOR_PALETTE.map((c) => (
+                <button
+                  key={c.key}
+                  title={c.label}
+                  style={{ backgroundColor: c.swatch }}
+                  className={`w-3.5 h-3.5 rounded-full border-2 transition-transform ${
+                    selectedColor === c.key
+                      ? "border-foreground/60 scale-110"
+                      : "border-transparent hover:scale-110"
+                  }`}
+                  onClick={() => setSelectedColor(c.key)}
+                />
+              ))}
+            </div>
+          </div>
           <textarea
             ref={textareaRef}
             value={noteText}
