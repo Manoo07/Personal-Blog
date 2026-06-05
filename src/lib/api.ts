@@ -287,6 +287,22 @@ export interface UserStatsResponse {
   sections: SectionStatNode[];
 }
 
+export interface ApiNote {
+  id: string;
+  selectedText: string;
+  note: string;
+  createdAt: string;
+}
+
+export interface NoteListResponse {
+  notes: ApiNote[];
+}
+
+export interface CreateNoteRequest {
+  selectedText: string;
+  note: string;
+}
+
 // ── User token management (localStorage, separate from admin sessionStorage) ──
 
 const USER_TOKEN_KEY = "journal_user_token";
@@ -682,6 +698,25 @@ class ApiClient {
 
   async getUserStats(): Promise<UserStatsResponse> {
     return this.userRequest("/api/user/progress/stats");
+  }
+
+  // ============================================
+  // User Notes
+  // ============================================
+
+  async createNote(postSlug: string, data: CreateNoteRequest): Promise<ApiNote> {
+    return this.userRequest(`/api/user/notes/${postSlug}`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getNotes(postSlug: string): Promise<NoteListResponse> {
+    return this.userRequest(`/api/user/notes/${postSlug}`);
+  }
+
+  async deleteNote(noteId: string): Promise<{ success: boolean }> {
+    return this.userRequest(`/api/user/notes/${noteId}`, { method: "DELETE" });
   }
 
   async uploadImage(file: File): Promise<UploadImageResponse> {

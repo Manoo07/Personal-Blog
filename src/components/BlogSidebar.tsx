@@ -1,5 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
+import { Trash2, StickyNote } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useNotes, useDeleteNote } from "@/hooks/use-api";
 
 interface Heading {
   id: string;
@@ -9,13 +11,20 @@ interface Heading {
 
 interface BlogSidebarProps {
   content: string;
+  postSlug?: string;
+  isLoggedIn?: boolean;
 }
 
-const BlogSidebar = ({ content }: BlogSidebarProps) => {
+const BlogSidebar = ({ content, postSlug, isLoggedIn }: BlogSidebarProps) => {
   const [headings, setHeadings] = useState<Heading[]>([]);
   const [activeId, setActiveId] = useState<string>("");
+  const [showNotes, setShowNotes] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<Map<string, HTMLElement>>(new Map());
+
+  const { data: notesData } = useNotes(postSlug ?? "");
+  const deleteNote = useDeleteNote(postSlug ?? "");
+  const notes = notesData?.notes ?? [];
 
   // Parse headings from rendered markdown content
   const parseHeadings = useCallback(() => {
@@ -101,7 +110,7 @@ const BlogSidebar = ({ content }: BlogSidebarProps) => {
     }
   };
 
-  if (headings.length === 0) return null;
+  if (headings.length === 0 && (!isLoggedIn || notes.length === 0)) return null;
 
   // Group headings under their parent h2
   const groups: { parent: Heading; children: Heading[] }[] = [];
@@ -199,6 +208,63 @@ const BlogSidebar = ({ content }: BlogSidebarProps) => {
             </ul>
           </div>
         </div>
+
+        {/* ── Notes panel (logged-in users only) ── */}
+        {isLoggedIn && postSlug && (
+          <div className="mt-2 rounded-lg border border-border/40 bg-card/50 backdrop-blur-sm">
+            <button
+              onClick={() => setShowNotes((v) => !v)}
+              className="w-full flex items-center justify-between px-3 py-2.5 text-left hover:bg-muted/30 rounded-lg transition-colors"
+            >
+              <div className="flex items-center gap-1.5">
+                <StickyNote className="w-3 h-3 text-muted-foreground" />
+                <span className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider">
+                  My Notes
+                </span>
+              </div>
+              {notes.length > 0 && (
+                <span className="text-[9px] font-medium bg-primary/15 text-primary px-1.5 py-0.5 rounded-full">
+                  {notes.length}
+                </span>
+              )}
+            </button>
+
+            {showNotes && (
+              <div className="px-3 pb-3 space-y-2 max-h-72 overflow-y-auto">
+                {notes.length === 0 ? (
+                  <p className="text-[10px] text-muted-foreground/60 italic text-center py-2">
+                    Select text to add notes
+                  </p>
+                ) : (
+                  notes.map((n) => (
+                    <div
+                      key={n.id}
+                      className="group rounded-md border border-border/30 bg-background/60 p-2 text-[11px] space-y-1"
+                    >
+                      <p className="text-muted-foreground/70 italic line-clamp-2 border-l-2 border-primary/30 pl-1.5 leading-snug">
+                        "{n.selectedText}"
+                      </p>
+                      <p className="text-foreground leading-snug">{n.note}</p>
+                      <div className="flex items-center justify-between pt-0.5">
+                        <span className="text-[9px] text-muted-foreground/50">
+                          {new Date(n.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                        </span>
+                        <button
+                          onClick={() => deleteNote.mutate(n.id)}
+                          disabled={deleteNote.isPending}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded hover:text-destructive"
+                          aria-label="Delete note"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </nav>
     </aside>
   );

@@ -32,6 +32,9 @@ import {
   UpdatePasswordRequest,
   UserProgressItem,
   UserStatsResponse,
+  ApiNote,
+  NoteListResponse,
+  CreateNoteRequest,
   isUserLoggedIn,
 } from "@/lib/api";
 
@@ -453,6 +456,39 @@ export function useUserStats() {
     queryFn: () => api.getUserStats(),
     enabled: isUserLoggedIn(),
     staleTime: 1000 * 60 * 5,
+  });
+}
+
+// ============================================
+// User Notes Hooks
+// ============================================
+
+export function useNotes(postSlug: string) {
+  return useQuery<NoteListResponse, ApiClientError>({
+    queryKey: ["user", "notes", postSlug],
+    queryFn: () => api.getNotes(postSlug),
+    enabled: isUserLoggedIn() && !!postSlug,
+    staleTime: 1000 * 60 * 2,
+  });
+}
+
+export function useCreateNote(postSlug: string) {
+  const queryClient = useQueryClient();
+  return useMutation<ApiNote, ApiClientError, CreateNoteRequest>({
+    mutationFn: (data) => api.createNote(postSlug, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["user", "notes", postSlug] });
+    },
+  });
+}
+
+export function useDeleteNote(postSlug: string) {
+  const queryClient = useQueryClient();
+  return useMutation<{ success: boolean }, ApiClientError, string>({
+    mutationFn: (noteId) => api.deleteNote(noteId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["user", "notes", postSlug] });
+    },
   });
 }
 

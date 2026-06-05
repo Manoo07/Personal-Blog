@@ -1,4 +1,5 @@
 import { useParams, Link } from "react-router-dom";
+import { useRef } from "react";
 import ReactMarkdown, { Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
@@ -6,6 +7,7 @@ import Layout from "@/components/Layout";
 import Breadcrumb from "@/components/Breadcrumb";
 import BlogSidebar from "@/components/BlogSidebar";
 import SectionNav from "@/components/SectionNav";
+import PostNotes from "@/components/PostNotes";
 import { usePost, useAdjacentPosts, useMarkComplete, useUnmarkComplete, useUserProgress } from "@/hooks/use-api";
 import { useUserAuth } from "@/contexts/UserAuthContext";
 import { Loader2, ChevronLeft, ChevronRight, CheckCircle2, Circle } from "lucide-react";
@@ -58,6 +60,7 @@ const BlogPost = () => {
   const { data: progressData } = useUserProgress();
   const markComplete = useMarkComplete();
   const unmarkComplete = useUnmarkComplete();
+  const articleRef = useRef<HTMLElement>(null);
 
   const completedItem = progressData?.completed.find((c) => c.postSlug === slug);
   const isCompleted = !!completedItem;
@@ -106,7 +109,7 @@ const BlogPost = () => {
 
         <div className="lg:pr-52 xl:pl-60 xl:pr-56 2xl:pl-72 2xl:pr-56">
           {/* Main content */}
-          <article className="max-w-3xl">
+          <article ref={articleRef} className="max-w-3xl">
             <header className="mb-6 animate-fade-in">
               <div className="flex flex-col sm:flex-row sm:items-center gap-2 text-xs text-muted-foreground mb-2">
                 <time>
@@ -225,8 +228,13 @@ const BlogPost = () => {
           </article>
         </div>
 
-        {/* Fixed Right Sidebar - Table of Contents */}
-        <BlogSidebar content={post.content} />
+        {/* Fixed Right Sidebar - Table of Contents + Notes */}
+        <BlogSidebar content={post.content} postSlug={slug} isLoggedIn={isLoggedIn} />
+
+        {/* Floating selection → note bubble (logged-in only) */}
+        {isLoggedIn && slug && (
+          <PostNotes postSlug={slug} articleRef={articleRef} />
+        )}
       </div>
     </Layout>
   );
