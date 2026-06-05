@@ -1,77 +1,147 @@
-import { useState, useEffect, useRef, useCallback } from "react";
-import { MessageSquarePlus, X, Loader2 } from "lucide-react";
-import { useCreateNote } from "@/hooks/use-api";
+import { useState, useEffect, useRef } from "react";
+import { MessageSquarePlus, X, Loader2, Trash2 } from "lucide-react";
+import { useCreateNote, useNotes, useDeleteNote } from "@/hooks/use-api";
+import type { ApiNote } from "@/lib/api";
 
-interface SelectionBubbleProps {
+interface Props {
   postSlug: string;
   articleRef: React.RefObject<HTMLElement | null>;
 }
 
-interface BubblePosition {
-  x: number;
-  y: number;
-  selectedText: string;
+// Viewport-relative coords (use directly with position:fixed)
+interface SelectionAnchor {
+  text: string;
+  top: number;
+  bottom: number;
+  left: number;
 }
 
-const PostNotes = ({ postSlug, articleRef }: SelectionBubbleProps) => {
-  const [bubble, setBubble] = useState<BubblePosition | null>(null);
-  const [showInput, setShowInput] = useState(false);
+interface NotePopover {
+  note: ApiNote;
+  top: number;
+  left: number;
+}
+
+// ── DOM helpers ───────────────────────────────────────────────────────────────
+
+function clearHighlights(container: HTMLElement) {
+  container.querySelectorAll("mark[data-note-id]").forEach((mark) => {
+    const parent = mark.parentNode!;
+    while (mark.firstChild) parent.insertBefore(mark.firstChild, mark);
+    parent.removeChild(mark);
+  });
+  container.normalize();
+}
+
+function applyHighlight(container: HTMLElement, note: ApiNote) {
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, null);
+  let node: Text | null;
+  while ((node = walker.nextNode() as Text | null)) {
+    const idx = (node.textContent ?? "").indexOf(note.selectedText);
+    if (idx === -1) continue;
+    try {
+      const range = document.createRange();
+      range.setStart(node, idx);
+      range.setEnd(node, idx + note.selectedText.length);
+      const mark = document.createElement("mark");
+      mark.dataset.noteId = note.id;
+      mark.className = "note-highlight";
+      range.surroundContents(mark);
+    } catch {
+      // selection spans multiple nodes — skip
+    }
+    break; // first occurrence only
+  }
+}
+
+// ── Component ─────────────────────────────────────────────────────────────────
+
+const PostNotes = ({ postSlug, articleRef }: Props) => {
+  const [anchor, setAnchor] = useState<SelectionAnchor | null>(null);
+  const [inputOpen, setInputOpen] = useState(false);
   const [noteText, setNoteText] = useState("");
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [popover, setPopover] = useState<NotePopover | null>(null);
+
+  const inputPanelRef = useRef<HTMLDivElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
   const createNote = useCreateNote(postSlug);
+  const { data: notesData } = useNotes(postSlug);
+  const deleteNote = useDeleteNote(postSlug);
+  const notes = notesData?.notes ?? [];
 
-  const clearBubble = useCallback(() => {
-    setBubble(null);
-    setShowInput(false);
-    setNoteText("");
-  }, []);
-
+  // ── Re-apply highlights whenever notes change ────────────────────────────
   useEffect(() => {
-    const handleMouseUp = (e: MouseEvent) => {
-      // Ignore clicks inside the popover itself
-      if (popoverRef.current?.contains(e.target as Node)) return;
+    const article = articleRef.current;
+    if (!article) return;
 
-      const selection = window.getSelection();
-      if (!selection || selection.isCollapsed) {
-        // Don't clear if the popover is open — let the user type
-        if (!showInput) clearBubble();
-        return;
-      }
+    clearHighlights(article);
+    for (const note of notes) applyHighlight(article, note);
 
-      const selectedText = selection.toString().trim();
-      if (!selectedText || selectedText.length < 3) {
-        if (!showInput) clearBubble();
-        return;
-      }
-
-      // Only react to selections inside the article
-      const article = articleRef.current;
-      if (!article) return;
-      const range = selection.getRangeAt(0);
-      if (!article.contains(range.commonAncestorContainer)) {
-        if (!showInput) clearBubble();
-        return;
-      }
-
-      const rect = range.getBoundingClientRect();
-      setBubble({
-        x: rect.right + window.scrollX,
-        y: rect.top + window.scrollY - 8,
-        selectedText,
-      });
-      setShowInput(false);
+    const handleMarkClick = (e: Event) => {
+      e.stopPropagation();
+      const mark = e.currentTarget as HTMLElement;
+      const note = notes.find((n) => n.id === mark.dataset.noteId);
+      if (!note) return;
+      const rect = mark.getBoundingClientRect();
+      // Position popover below the mark, aligned to its left edge
+      const panelWidth = 260;
+      const left = Math.max(8, Math.min(rect.left, window.innerWidth - panelWidth - 8));
+      const top = rect.bottom + 6 + window.scrollY; // absolute for scrolled pages
+      setPopover({ note, top, left });
+      setAnchor(null);
+      setInputOpen(false);
     };
 
-    // Close popover when clicking outside
-    const handleMouseDown = (e: MouseEvent) => {
-      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
-        const selection = window.getSelection();
-        // If user is starting a new selection inside article, don't clear yet
+    article.querySelectorAll("mark[data-note-id]").forEach((mark) => {
+      (mark as HTMLElement).addEventListener("click", handleMarkClick);
+    });
+
+    return () => {
+      article.querySelectorAll("mark[data-note-id]").forEach((mark) => {
+        (mark as HTMLElement).removeEventListener("click", handleMarkClick);
+      });
+    };
+  }, [notes, articleRef]);
+
+  // ── Detect text selection inside article ─────────────────────────────────
+  useEffect(() => {
+    const handleMouseUp = (e: MouseEvent) => {
+      if (inputPanelRef.current?.contains(e.target as Node)) return;
+      if (popoverRef.current?.contains(e.target as Node)) return;
+
+      // Small delay so the selection rect is stable
+      setTimeout(() => {
+        const sel = window.getSelection();
+        if (!sel || sel.isCollapsed) {
+          setAnchor(null);
+          setInputOpen(false);
+          return;
+        }
+        const text = sel.toString().trim();
+        if (text.length < 3) { setAnchor(null); setInputOpen(false); return; }
+
         const article = articleRef.current;
-        if (article?.contains(e.target as Node) && selection && !selection.isCollapsed) return;
-        clearBubble();
-      }
+        if (!article) return;
+        const range = sel.getRangeAt(0);
+        if (!article.contains(range.commonAncestorContainer)) {
+          setAnchor(null); setInputOpen(false); return;
+        }
+
+        const rect = range.getBoundingClientRect();
+        setAnchor({ text, top: rect.top, bottom: rect.bottom, left: rect.left });
+        setInputOpen(false);
+        setPopover(null);
+      }, 10);
+    };
+
+    const handleMouseDown = (e: MouseEvent) => {
+      if (inputPanelRef.current?.contains(e.target as Node)) return;
+      if (popoverRef.current?.contains(e.target as Node)) return;
+      if ((e.target as HTMLElement).closest("mark[data-note-id]")) return;
+      setPopover(null);
+      // Don't clear anchor here — let mouseup handle it
     };
 
     document.addEventListener("mouseup", handleMouseUp);
@@ -80,65 +150,77 @@ const PostNotes = ({ postSlug, articleRef }: SelectionBubbleProps) => {
       document.removeEventListener("mouseup", handleMouseUp);
       document.removeEventListener("mousedown", handleMouseDown);
     };
-  }, [showInput, clearBubble, articleRef]);
+  }, [articleRef]);
 
-  // Focus textarea when popover opens
+  // Focus textarea when input panel opens
   useEffect(() => {
-    if (showInput) {
-      setTimeout(() => textareaRef.current?.focus(), 50);
-    }
-  }, [showInput]);
+    if (inputOpen) setTimeout(() => textareaRef.current?.focus(), 40);
+  }, [inputOpen]);
+
+  const dismiss = () => {
+    setAnchor(null);
+    setInputOpen(false);
+    setNoteText("");
+    window.getSelection()?.removeAllRanges();
+  };
 
   const handleSave = async () => {
-    if (!bubble || !noteText.trim()) return;
+    if (!anchor || !noteText.trim()) return;
     try {
-      await createNote.mutateAsync({
-        selectedText: bubble.selectedText,
-        note: noteText.trim(),
-      });
-      // Clear selection highlight
-      window.getSelection()?.removeAllRanges();
-      clearBubble();
-    } catch {
-      // error surfaced via mutation state
-    }
+      await createNote.mutateAsync({ selectedText: anchor.text, note: noteText.trim() });
+      dismiss();
+    } catch {}
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Escape") clearBubble();
+    if (e.key === "Escape") dismiss();
     if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleSave();
   };
 
-  if (!bubble) return null;
+  // ── Layout helpers ────────────────────────────────────────────────────────
+  const PANEL_WIDTH = 256;
+  const PANEL_HEIGHT = 180;
+
+  function panelPosition(top: number, bottom: number, left: number) {
+    const spaceBelow = window.innerHeight - bottom;
+    const panelTop = spaceBelow >= PANEL_HEIGHT + 8
+      ? bottom + 8      // place below selection
+      : top - PANEL_HEIGHT - 8; // place above selection
+    const panelLeft = Math.max(8, Math.min(left, window.innerWidth - PANEL_WIDTH - 8));
+    return { top: panelTop, left: panelLeft };
+  }
 
   return (
     <>
-      {/* Floating "+" button anchored to end of selection */}
-      {!showInput && (
+      {/* ── "Add note" button — appears at bottom-left of selection ── */}
+      {anchor && !inputOpen && (
         <button
           onMouseDown={(e) => e.preventDefault()} // keep selection alive
-          onClick={() => setShowInput(true)}
-          style={{ left: bubble.x + 6, top: bubble.y }}
-          className="fixed z-50 flex items-center justify-center w-7 h-7 rounded-full bg-primary text-primary-foreground shadow-md hover:opacity-90 transition-opacity"
-          aria-label="Add note"
+          onClick={() => setInputOpen(true)}
+          style={(() => {
+            const { top, left } = panelPosition(anchor.top, anchor.bottom, anchor.left);
+            return { position: "fixed", top, left };
+          })()}
+          className="z-50 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium shadow-lg hover:opacity-90 transition-opacity select-none"
         >
           <MessageSquarePlus className="w-3.5 h-3.5" />
+          Add note
         </button>
       )}
 
-      {/* Note input popover */}
-      {showInput && (
+      {/* ── Note input panel ── */}
+      {anchor && inputOpen && (
         <div
-          ref={popoverRef}
-          style={{
-            left: Math.min(bubble.x + 6, window.innerWidth - 260),
-            top: bubble.y,
-          }}
-          className="fixed z-50 w-60 rounded-lg border border-border bg-card shadow-lg p-3 flex flex-col gap-2"
+          ref={inputPanelRef}
+          style={(() => {
+            const { top, left } = panelPosition(anchor.top, anchor.bottom, anchor.left);
+            return { position: "fixed", top, left, width: PANEL_WIDTH, zIndex: 50 };
+          })()}
+          className="rounded-lg border border-border bg-card shadow-xl flex flex-col gap-2 p-3"
         >
-          {/* Selected text preview */}
-          <p className="text-[10px] text-muted-foreground italic line-clamp-2 border-l-2 border-primary/40 pl-2">
-            "{bubble.selectedText}"
+          {/* Quoted selected text */}
+          <p className="text-[10px] text-muted-foreground italic line-clamp-2 border-l-2 border-primary/50 pl-2 leading-snug">
+            "{anchor.text}"
           </p>
 
           <textarea
@@ -146,18 +228,17 @@ const PostNotes = ({ postSlug, articleRef }: SelectionBubbleProps) => {
             value={noteText}
             onChange={(e) => setNoteText(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Add your note…"
+            placeholder="Write a note…"
             rows={3}
-            className="w-full resize-none rounded-md border border-border bg-background px-2.5 py-1.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+            className="w-full resize-none rounded-md border border-border bg-background px-2.5 py-1.5 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-primary"
           />
 
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-[10px] text-muted-foreground">⌘↵ to save</span>
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] text-muted-foreground/50">⌘↵ save</span>
             <div className="flex gap-1.5">
               <button
-                onClick={clearBubble}
-                className="p-1 rounded hover:bg-muted transition-colors"
-                aria-label="Cancel"
+                onClick={dismiss}
+                className="p-1.5 rounded hover:bg-muted transition-colors"
               >
                 <X className="w-3.5 h-3.5 text-muted-foreground" />
               </button>
@@ -170,6 +251,53 @@ const PostNotes = ({ postSlug, articleRef }: SelectionBubbleProps) => {
                 Save
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Note detail popover — shown when clicking a highlight ── */}
+      {popover && (
+        <div
+          ref={popoverRef}
+          style={{
+            position: "absolute",
+            top: popover.top,
+            left: Math.max(8, Math.min(popover.left, window.innerWidth - PANEL_WIDTH - 8)),
+            width: PANEL_WIDTH,
+            zIndex: 50,
+          }}
+          className="rounded-lg border border-border bg-card shadow-xl p-3 flex flex-col gap-2"
+        >
+          <div className="flex items-start justify-between gap-2">
+            <p className="text-[10px] text-muted-foreground italic line-clamp-2 border-l-2 border-primary/50 pl-2 leading-snug flex-1">
+              "{popover.note.selectedText}"
+            </p>
+            <button
+              onClick={() => setPopover(null)}
+              className="flex-shrink-0 p-0.5 rounded hover:bg-muted transition-colors"
+            >
+              <X className="w-3.5 h-3.5 text-muted-foreground" />
+            </button>
+          </div>
+
+          <p className="text-sm text-foreground leading-snug">{popover.note.note}</p>
+
+          <div className="flex items-center justify-between pt-1 border-t border-border/40">
+            <span className="text-[10px] text-muted-foreground/50">
+              {new Date(popover.note.createdAt).toLocaleDateString("en-US", {
+                month: "short", day: "numeric", year: "numeric",
+              })}
+            </span>
+            <button
+              onClick={() => deleteNote.mutate(popover.note.id)}
+              disabled={deleteNote.isPending}
+              className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-destructive transition-colors disabled:opacity-50"
+            >
+              {deleteNote.isPending
+                ? <Loader2 className="w-3 h-3 animate-spin" />
+                : <Trash2 className="w-3 h-3" />}
+              Delete
+            </button>
           </div>
         </div>
       )}
