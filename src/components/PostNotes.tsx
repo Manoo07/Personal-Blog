@@ -65,6 +65,9 @@ const PostNotes = ({ postSlug, articleRef }: Props) => {
   const inputPanelRef = useRef<HTMLDivElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const addBtnRef = useRef<HTMLButtonElement>(null);
+  // Ref mirror of inputOpen so event-handler closures always read the live value
+  const inputOpenRef = useRef(false);
 
   const createNote = useCreateNote(postSlug);
   const { data: notesData } = useNotes(postSlug);
@@ -108,32 +111,32 @@ const PostNotes = ({ postSlug, articleRef }: Props) => {
   // ── Detect text selection inside article ─────────────────────────────────
   useEffect(() => {
     const handleMouseUp = (e: MouseEvent) => {
+      // Ignore events inside our own UI elements (including the "Add note" button)
+      if (addBtnRef.current?.contains(e.target as Node)) return;
       if (inputPanelRef.current?.contains(e.target as Node)) return;
       if (popoverRef.current?.contains(e.target as Node)) return;
 
-      // Small delay so the selection rect is stable
-      setTimeout(() => {
-        const sel = window.getSelection();
-        if (!sel || sel.isCollapsed) {
-          setAnchor(null);
-          setInputOpen(false);
-          return;
-        }
-        const text = sel.toString().trim();
-        if (text.length < 3) { setAnchor(null); setInputOpen(false); return; }
+      // If the input panel is already open don't reset it on every mouseup
+      if (inputOpenRef.current) return;
 
-        const article = articleRef.current;
-        if (!article) return;
-        const range = sel.getRangeAt(0);
-        if (!article.contains(range.commonAncestorContainer)) {
-          setAnchor(null); setInputOpen(false); return;
-        }
+      const sel = window.getSelection();
+      if (!sel || sel.isCollapsed) {
+        setAnchor(null);
+        return;
+      }
+      const text = sel.toString().trim();
+      if (text.length < 3) { setAnchor(null); return; }
 
-        const rect = range.getBoundingClientRect();
-        setAnchor({ text, top: rect.top, bottom: rect.bottom, left: rect.left });
-        setInputOpen(false);
-        setPopover(null);
-      }, 10);
+      const article = articleRef.current;
+      if (!article) return;
+      const range = sel.getRangeAt(0);
+      if (!article.contains(range.commonAncestorContainer)) {
+        setAnchor(null); return;
+      }
+
+      const rect = range.getBoundingClientRect();
+      setAnchor({ text, top: rect.top, bottom: rect.bottom, left: rect.left });
+      setPopover(null);
     };
 
     const handleMouseDown = (e: MouseEvent) => {
@@ -151,6 +154,9 @@ const PostNotes = ({ postSlug, articleRef }: Props) => {
       document.removeEventListener("mousedown", handleMouseDown);
     };
   }, [articleRef]);
+
+  // Keep ref in sync so event handlers always see the live value
+  useEffect(() => { inputOpenRef.current = inputOpen; }, [inputOpen]);
 
   // Focus textarea when input panel opens
   useEffect(() => {
@@ -195,6 +201,7 @@ const PostNotes = ({ postSlug, articleRef }: Props) => {
       {/* ── "Add note" button — appears at bottom-left of selection ── */}
       {anchor && !inputOpen && (
         <button
+          ref={addBtnRef}
           onMouseDown={(e) => e.preventDefault()} // keep selection alive
           onClick={() => setInputOpen(true)}
           style={(() => {
