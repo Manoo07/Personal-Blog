@@ -52,22 +52,44 @@ function clearHighlights(container: HTMLElement) {
 }
 
 function applyHighlight(container: HTMLElement, note: ApiNote) {
+  // Index every text node with its absolute char position in the container's full text.
+  // This lets us find matches that span multiple DOM nodes (e.g. syntax-highlighted spans).
+  const entries: { node: Text; start: number; end: number }[] = [];
+  let pos = 0;
   const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, null);
   let node: Text | null;
   while ((node = walker.nextNode() as Text | null)) {
-    const idx = (node.textContent ?? "").indexOf(note.selectedText);
-    if (idx === -1) continue;
-    try {
-      const range = document.createRange();
-      range.setStart(node, idx);
-      range.setEnd(node, idx + note.selectedText.length);
-      const mark = document.createElement("mark");
-      mark.dataset.noteId = note.id;
-      mark.dataset.color = note.color || "yellow";
-      mark.className = `note-highlight ${note.note ? "note-has-note" : "note-highlight-only"}`;
-      range.surroundContents(mark);
-    } catch { /* spans multiple nodes */ }
-    break;
+    const len = node.textContent?.length ?? 0;
+    entries.push({ node, start: pos, end: pos + len });
+    pos += len;
+  }
+
+  const fullText = entries.map((e) => e.node.textContent ?? "").join("");
+  const matchStart = fullText.indexOf(note.selectedText);
+  if (matchStart === -1) return;
+  const matchEnd = matchStart + note.selectedText.length;
+
+  const startEntry = entries.find((e) => e.start <= matchStart && matchStart < e.end);
+  const endEntry = entries.find((e) => e.start < matchEnd && matchEnd <= e.end);
+  if (!startEntry || !endEntry) return;
+
+  const range = document.createRange();
+  range.setStart(startEntry.node, matchStart - startEntry.start);
+  range.setEnd(endEntry.node, matchEnd - endEntry.start);
+
+  const mark = document.createElement("mark");
+  mark.dataset.noteId = note.id;
+  mark.dataset.color = note.color || "yellow";
+  mark.className = `note-highlight ${note.note ? "note-has-note" : "note-highlight-only"}`;
+
+  try {
+    // Fast path: selection is within a single element
+    range.surroundContents(mark);
+  } catch {
+    // Fallback: range crosses element boundaries (syntax-highlighted code blocks).
+    // extractContents preserves child spans; insertNode places the mark in-position.
+    mark.appendChild(range.extractContents());
+    range.insertNode(mark);
   }
 }
 

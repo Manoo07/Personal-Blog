@@ -499,7 +499,7 @@ mark.note-highlight[data-color="violet"]  { background: #e9d5ff; color: #581c87;
    Dark theme  (vibrant backgrounds + light text, per palette)
 ────────────────────────────────────────────────────────────── */
 .dark mark.note-highlight,
-.dark mark.note-highlight[data-color="yellow"]  { background: #fef08a; color: #713f12; border-bottom: 1.5px solid #ca8a04; }
+.dark mark.note-highlight[data-color="yellow"]  { background: rgba(234,179,8,0.25); color: inherit; border-bottom: 1.5px solid rgba(234,179,8,0.65); }
 .dark mark.note-highlight[data-color="indigo"]  { background: #4f46e5; color: #c7d2fe; border-bottom: 1.5px solid rgba(199,210,254,0.4); }
 .dark mark.note-highlight[data-color="sky"]     { background: #0ea5e9; color: #e0f2fe; border-bottom: 1.5px solid rgba(224,242,254,0.4); }
 .dark mark.note-highlight[data-color="emerald"] { background: #16a34a; color: #dcfce7; border-bottom: 1.5px solid rgba(220,252,231,0.4); }
