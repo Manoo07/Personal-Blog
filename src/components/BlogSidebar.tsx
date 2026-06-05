@@ -1,7 +1,8 @@
 import { useEffect, useState, useCallback, useRef } from "react";
-import { Trash2, StickyNote } from "lucide-react";
+import { StickyNote, Highlighter, MessageSquare, ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useNotes, useDeleteNote } from "@/hooks/use-api";
+import { useNotes } from "@/hooks/use-api";
+import { scrollToHighlight } from "@/components/PostNotes";
 
 interface Heading {
   id: string;
@@ -23,7 +24,6 @@ const BlogSidebar = ({ content, postSlug, isLoggedIn }: BlogSidebarProps) => {
   const itemRefs = useRef<Map<string, HTMLElement>>(new Map());
 
   const { data: notesData } = useNotes(postSlug ?? "");
-  const deleteNote = useDeleteNote(postSlug ?? "");
   const notes = notesData?.notes ?? [];
 
   // Parse headings from rendered markdown content
@@ -209,7 +209,7 @@ const BlogSidebar = ({ content, postSlug, isLoggedIn }: BlogSidebarProps) => {
           </div>
         </div>
 
-        {/* ── Notes panel (logged-in users only) ── */}
+        {/* ── My Notes panel (logged-in users only) ── */}
         {isLoggedIn && postSlug && (
           <div className="mt-2 rounded-lg border border-border/40 bg-card/50 backdrop-blur-sm">
             <button
@@ -223,42 +223,50 @@ const BlogSidebar = ({ content, postSlug, isLoggedIn }: BlogSidebarProps) => {
                 </span>
               </div>
               {notes.length > 0 && (
-                <span className="text-[9px] font-medium bg-primary/15 text-primary px-1.5 py-0.5 rounded-full">
+                <span className="text-[9px] font-medium bg-amber-400/20 text-amber-600 dark:text-amber-400 px-1.5 py-0.5 rounded-full">
                   {notes.length}
                 </span>
               )}
             </button>
 
             {showNotes && (
-              <div className="px-3 pb-3 space-y-2 max-h-72 overflow-y-auto">
+              <div className="px-2 pb-2.5 space-y-1.5 max-h-80 overflow-y-auto">
                 {notes.length === 0 ? (
-                  <p className="text-[10px] text-muted-foreground/60 italic text-center py-2">
-                    Select text to add notes
+                  <p className="text-[10px] text-muted-foreground/60 italic text-center py-3">
+                    Select any text to highlight or add a note
                   </p>
                 ) : (
                   notes.map((n) => (
-                    <div
+                    <button
                       key={n.id}
-                      className="group rounded-md border border-border/30 bg-background/60 p-2 text-[11px] space-y-1"
+                      onClick={() => scrollToHighlight(n.id)}
+                      className="group w-full text-left rounded-md border border-border/30 bg-background/60 p-2 text-[11px] space-y-1 hover:border-amber-400/50 hover:bg-amber-400/5 transition-colors"
                     >
-                      <p className="text-muted-foreground/70 italic line-clamp-2 border-l-2 border-primary/30 pl-1.5 leading-snug">
+                      {/* Quoted text */}
+                      <p className="text-muted-foreground/70 italic line-clamp-2 border-l-2 border-amber-400/50 pl-1.5 leading-snug">
                         "{n.selectedText}"
                       </p>
-                      <p className="text-foreground leading-snug">{n.note}</p>
-                      <div className="flex items-center justify-between pt-0.5">
-                        <span className="text-[9px] text-muted-foreground/50">
-                          {new Date(n.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+
+                      {/* Note body or "Highlight only" badge */}
+                      {n.note ? (
+                        <p className="text-foreground leading-snug line-clamp-2">{n.note}</p>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-[9px] text-amber-600 dark:text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded-full">
+                          <Highlighter className="w-2.5 h-2.5" /> Highlight only
                         </span>
-                        <button
-                          onClick={() => deleteNote.mutate(n.id)}
-                          disabled={deleteNote.isPending}
-                          className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded hover:text-destructive"
-                          aria-label="Delete note"
-                        >
-                          <Trash2 className="w-3 h-3" />
-                        </button>
+                      )}
+
+                      {/* Footer */}
+                      <div className="flex items-center justify-between pt-0.5">
+                        <div className="flex items-center gap-1 text-[9px] text-muted-foreground/50">
+                          {n.note
+                            ? <MessageSquare className="w-2.5 h-2.5" />
+                            : <Highlighter className="w-2.5 h-2.5" />}
+                          {new Date(n.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                        </div>
+                        <ArrowRight className="w-3 h-3 text-muted-foreground/30 group-hover:text-amber-500 transition-colors" />
                       </div>
-                    </div>
+                    </button>
                   ))
                 )}
               </div>

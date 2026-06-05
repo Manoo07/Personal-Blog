@@ -290,8 +290,10 @@ export interface UserStatsResponse {
 export interface ApiNote {
   id: string;
   selectedText: string;
-  note: string;
+  note: string | null;
+  color: string;
   createdAt: string;
+  updatedAt: string;
 }
 
 export interface NoteListResponse {
@@ -300,7 +302,13 @@ export interface NoteListResponse {
 
 export interface CreateNoteRequest {
   selectedText: string;
-  note: string;
+  note?: string | null;
+  color?: string;
+}
+
+export interface UpdateNoteRequest {
+  note?: string | null;
+  color?: string;
 }
 
 // ── User token management (localStorage, separate from admin sessionStorage) ──
@@ -713,6 +721,13 @@ class ApiClient {
 
   async getNotes(postSlug: string): Promise<NoteListResponse> {
     return this.userRequest(`/api/user/notes/${postSlug}`);
+  }
+
+  async updateNote(noteId: string, data: UpdateNoteRequest): Promise<ApiNote> {
+    return this.userRequest(`/api/user/notes/${noteId}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
   }
 
   async deleteNote(noteId: string): Promise<{ success: boolean }> {

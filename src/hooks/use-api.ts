@@ -35,6 +35,7 @@ import {
   ApiNote,
   NoteListResponse,
   CreateNoteRequest,
+  UpdateNoteRequest,
   isUserLoggedIn,
 } from "@/lib/api";
 
@@ -476,6 +477,16 @@ export function useCreateNote(postSlug: string) {
   const queryClient = useQueryClient();
   return useMutation<ApiNote, ApiClientError, CreateNoteRequest>({
     mutationFn: (data) => api.createNote(postSlug, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["user", "notes", postSlug] });
+    },
+  });
+}
+
+export function useUpdateNote(postSlug: string) {
+  const queryClient = useQueryClient();
+  return useMutation<ApiNote, ApiClientError, { noteId: string; data: UpdateNoteRequest }>({
+    mutationFn: ({ noteId, data }) => api.updateNote(noteId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["user", "notes", postSlug] });
     },
