@@ -131,9 +131,9 @@ const BlogSidebar = ({ content, postSlug, isLoggedIn }: BlogSidebarProps) => {
 
   return (
     <aside className="hidden lg:block">
-      <nav className="fixed top-24 right-4 xl:right-8 w-48 xl:w-56">
-        <div className="rounded-lg border border-border/40 bg-card/50 backdrop-blur-sm">
-          <div className="px-3 pt-3 pb-1.5">
+      <nav className="fixed top-24 right-4 xl:right-8 w-48 xl:w-56 flex flex-col gap-2 max-h-[calc(100vh-7rem)] overflow-hidden">
+        <div className="rounded-lg border border-border/40 bg-card/50 backdrop-blur-sm flex flex-col min-h-0 flex-1">
+          <div className="px-3 pt-3 pb-1.5 flex-shrink-0">
             <h4 className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider">
               Table of Contents
             </h4>
@@ -142,7 +142,7 @@ const BlogSidebar = ({ content, postSlug, isLoggedIn }: BlogSidebarProps) => {
           {/* ── scrollable list ── */}
           <div
             ref={scrollContainerRef}
-            className="max-h-[calc(100vh-180px)] overflow-y-auto scroll-smooth px-3 pb-3 scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent"
+            className="flex-1 min-h-0 overflow-y-auto scroll-smooth px-3 pb-3 scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent"
           >
             <ul className="space-y-0.5 text-[11px]">
               {groups.map((group, gi) => (
@@ -211,7 +211,7 @@ const BlogSidebar = ({ content, postSlug, isLoggedIn }: BlogSidebarProps) => {
 
         {/* ── My Notes panel (logged-in users only) ── */}
         {isLoggedIn && postSlug && (
-          <div className="mt-2 rounded-lg border border-border/40 bg-card/50 backdrop-blur-sm">
+          <div className="rounded-lg border border-border/40 bg-card/50 backdrop-blur-sm flex-shrink-0">
             <button
               onClick={() => setShowNotes((v) => !v)}
               className="w-full flex items-center justify-between px-3 py-2.5 text-left hover:bg-muted/30 rounded-lg transition-colors"
@@ -230,7 +230,7 @@ const BlogSidebar = ({ content, postSlug, isLoggedIn }: BlogSidebarProps) => {
             </button>
 
             {showNotes && (
-              <div className="px-2 pb-2.5 space-y-1.5 max-h-80 overflow-y-auto">
+              <div className="px-2 pb-2.5 space-y-1.5 max-h-52 overflow-y-auto scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent">
                 {notes.length === 0 ? (
                   <p className="text-[10px] text-muted-foreground/60 italic text-center py-3">
                     Select any text to highlight or add a note
