@@ -43,7 +43,7 @@ const Layout = ({ children }: LayoutProps) => {
   return (
     <div className="min-h-screen flex flex-col">
       <header className="border-b border-border/50 sticky top-0 z-50 backdrop-blur-md bg-background/80">
-        <nav className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 h-12 flex items-center justify-between">
+        <nav className="w-full px-4 sm:px-6 md:px-8 lg:px-12 xl:px-16 h-12 flex items-center justify-between">
           <Link
             to="/"
             className="font-mono text-sm font-semibold tracking-tight text-foreground hover:text-primary transition-colors"
