@@ -93,7 +93,7 @@ const FOLDER_PALETTE = [
   { open: "text-amber-400",   closed: "text-amber-500/50"   }, // depth 0
   { open: "text-sky-400",     closed: "text-sky-500/50"     }, // depth 1
   { open: "text-emerald-400", closed: "text-emerald-500/50" }, // depth 2
-  { open: "text-violet-400",  closed: "text-violet-500/50"  }, // depth 3+
+  { open: "text-blue-400",    closed: "text-blue-500/50"    }, // depth 3+
 ];
 
 function folderColor(depth: number, isOpen: boolean): string {

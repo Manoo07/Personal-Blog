@@ -101,7 +101,7 @@
     --code-syntax-keyword: 349 68% 52%;
     --code-syntax-string: 214 100% 20%;
     --code-syntax-comment: 212 10% 45%;
-    --code-syntax-function: 267 42% 44%;
+    --code-syntax-function: 217 76% 42%;
     --code-syntax-number: 212 100% 40%;
     --code-syntax-builtin: 24 95% 46%;
     --surface: 220 20% 98%;
@@ -157,7 +157,7 @@
     --code-syntax-keyword: 5 96% 73%;
     --code-syntax-string: 201 100% 82%;
     --code-syntax-comment: 215 8% 58%;
-    --code-syntax-function: 267 100% 83%;
+    --code-syntax-function: 207 100% 73%;
     --code-syntax-number: 207 100% 74%;
     --code-syntax-builtin: 28 100% 67%;
     --surface: 220 14% 10%;
