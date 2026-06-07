@@ -159,11 +159,11 @@ const BlogSidebar = ({ content, postSlug, isLoggedIn }: BlogSidebarProps) => {
                       "text-left w-full py-1 px-1.5 rounded transition-all duration-200 flex items-start gap-1",
                       "hover:text-primary",
                       activeId === group.parent.id
-                        ? "text-primary font-medium bg-primary/10"
-                        : "text-muted-foreground"
+                        ? "text-primary font-semibold bg-primary/8"
+                        : "text-foreground/65 hover:text-foreground/90"
                     )}
                   >
-                    <span className="text-[10px] text-muted-foreground/60 w-4 flex-shrink-0">
+                    <span className="text-[10px] text-foreground/35 w-4 flex-shrink-0">
                       {gi + 1}.
                     </span>
                     <span className="line-clamp-2 leading-snug">{group.parent.text}</span>
@@ -175,8 +175,8 @@ const BlogSidebar = ({ content, postSlug, isLoggedIn }: BlogSidebarProps) => {
                       className={cn(
                         "ml-3 mt-0.5 space-y-0 border-l pl-2 transition-all duration-200",
                         isActiveInGroup(group)
-                          ? "border-primary/40 opacity-100"
-                          : "border-border/30 opacity-60"
+                          ? "border-primary/50"
+                          : "border-border/50"
                       )}
                     >
                       {group.children.map((child) => (
@@ -193,8 +193,8 @@ const BlogSidebar = ({ content, postSlug, isLoggedIn }: BlogSidebarProps) => {
                               "hover:text-primary",
                               child.level === 4 && "pl-2",
                               activeId === child.id
-                                ? "text-primary font-medium bg-primary/10"
-                                : "text-muted-foreground"
+                                ? "text-primary font-semibold bg-primary/8"
+                                : "text-foreground/55 hover:text-foreground/85"
                             )}
                           >
                             <span className="line-clamp-1 leading-snug">{child.text}</span>
