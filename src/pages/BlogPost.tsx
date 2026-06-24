@@ -8,6 +8,7 @@ import Breadcrumb from "@/components/Breadcrumb";
 import BlogSidebar from "@/components/BlogSidebar";
 import SectionNav from "@/components/SectionNav";
 import PostNotes from "@/components/PostNotes";
+import MermaidDiagram from "@/components/MermaidDiagram";
 import { usePost, useAdjacentPosts, useMarkComplete, useUnmarkComplete, useUserProgress } from "@/hooks/use-api";
 import { useUserAuth } from "@/contexts/UserAuthContext";
 import { Loader2, ChevronLeft, ChevronRight, CheckCircle2, Circle } from "lucide-react";
@@ -18,6 +19,7 @@ const markdownComponents: Components = {
   pre({ children, ...props }) {
     // Extract language from the child <code> element's className
     let language = "";
+    let codeContent = "";
     if (
       children &&
       typeof children === "object" &&
@@ -27,6 +29,13 @@ const markdownComponents: Components = {
       const className = codeProps?.className || "";
       const match = className.match(/language-(\w+)/);
       if (match) language = match[1];
+      if (typeof codeProps?.children === "string") {
+        codeContent = codeProps.children;
+      }
+    }
+
+    if (language === "mermaid") {
+      return <MermaidDiagram code={codeContent} />;
     }
 
     return (
