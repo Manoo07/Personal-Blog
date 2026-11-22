@@ -7,6 +7,7 @@ import SectionTreeDropdown from "@/components/SectionTreeDropdown";
 import { Pencil, Trash2, Plus, Save, Eye, Code, LogOut, Loader2, Globe, FileText, FolderTree, ImagePlus, ChevronUp, ChevronDown } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import remarkObsidian from "@/lib/remark-obsidian";
 import rehypeHighlight from "rehype-highlight";
 import {
   useLogin,
@@ -540,7 +541,7 @@ const Admin = () => {
                   <div>
                     <div className="h-[320px] sm:h-[400px] px-4 py-3 rounded-md bg-background border border-border overflow-auto">
                       <article className="prose prose-slate dark:prose-invert max-w-none prose-headings:font-bold prose-h1:text-2xl prose-h2:text-xl prose-h3:text-lg prose-p:text-sm prose-p:leading-relaxed prose-a:text-primary prose-strong:text-foreground prose-code:text-sm prose-pre:text-sm prose-li:text-sm">
-                        <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
+                        <ReactMarkdown remarkPlugins={[remarkGfm, remarkObsidian]} rehypePlugins={[rehypeHighlight]}>
                           {editingPost.content || "*Start writing to see preview...*"}
                         </ReactMarkdown>
                       </article>

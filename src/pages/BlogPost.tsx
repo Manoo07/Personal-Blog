@@ -2,6 +2,7 @@ import { useParams, Link } from "react-router-dom";
 import { useRef } from "react";
 import ReactMarkdown, { Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
+import remarkObsidian from "@/lib/remark-obsidian";
 import rehypeHighlight from "rehype-highlight";
 import Layout from "@/components/Layout";
 import Breadcrumb from "@/components/Breadcrumb";
@@ -150,7 +151,7 @@ const BlogPost = () => {
 
             <div className="prose prose-sm sm:prose prose-slate dark:prose-invert max-w-none animate-fade-in" style={{ animationDelay: "100ms" }}>
               <ReactMarkdown
-                remarkPlugins={[remarkGfm]}
+                remarkPlugins={[remarkGfm, remarkObsidian]}
                 rehypePlugins={[rehypeHighlight]}
                 components={markdownComponents}
               >

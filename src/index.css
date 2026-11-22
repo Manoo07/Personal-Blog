@@ -224,6 +224,44 @@
     color: hsl(var(--muted-foreground));
   }
 
+  /* Obsidian callouts: > [!type] Title  (rendered by src/lib/remark-obsidian.ts) */
+  .prose .callout {
+    --callout-rgb: 8, 109, 221;                 /* note / default (blue) */
+    margin: 1em 0;
+    padding: 0.7em 1em;
+    border-left: 3px solid rgb(var(--callout-rgb));
+    border-radius: 4px;
+    background: rgba(var(--callout-rgb), 0.08);
+    color: hsl(var(--foreground));
+  }
+  .prose .callout > :last-child { margin-bottom: 0; }
+  .prose .callout-title {
+    margin: 0 0 0.35em;
+    font-weight: 600;
+    color: rgb(var(--callout-rgb));
+  }
+  .prose .callout-title:only-child { margin-bottom: 0; }
+  .prose .callout[data-callout="abstract"],
+  .prose .callout[data-callout="info"],
+  .prose .callout[data-callout="todo"]     { --callout-rgb: 0, 150, 190; }   /* cyan   */
+  .prose .callout[data-callout="tip"]      { --callout-rgb: 0, 160, 130; }   /* teal   */
+  .prose .callout[data-callout="success"]  { --callout-rgb: 8, 155, 70; }    /* green  */
+  .prose .callout[data-callout="question"] { --callout-rgb: 214, 140, 0; }   /* yellow */
+  .prose .callout[data-callout="warning"]  { --callout-rgb: 230, 110, 0; }   /* orange */
+  .prose .callout[data-callout="failure"],
+  .prose .callout[data-callout="danger"],
+  .prose .callout[data-callout="bug"]      { --callout-rgb: 220, 50, 60; }   /* red    */
+  .prose .callout[data-callout="example"]  { --callout-rgb: 120, 82, 238; }  /* purple */
+  .prose .callout[data-callout="quote"]    { --callout-rgb: 130, 130, 130; } /* gray   */
+
+  /* ==highlight== (rendered as <mark> by src/lib/remark-obsidian.ts) */
+  .prose mark:not(.note-highlight) {
+    background: rgba(229, 162, 0, 0.22);
+    color: inherit;
+    border-radius: 2px;
+    padding: 0 2px;
+  }
+
   .prose ul {
     @apply list-disc pl-6 mb-5 space-y-2;
     color: hsl(var(--foreground) / 0.9);
