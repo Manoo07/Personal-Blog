@@ -1,7 +1,9 @@
 import { Link, useLocation } from "react-router-dom";
 import { ReactNode, useState } from "react";
-import { Menu, X, Github, Linkedin, LogOut, KeyRound, BarChart2 } from "lucide-react";
-import ThemeToggle from "@/components/ThemeToggle";
+import { Menu, X, LogOut, KeyRound, BarChart2 } from "lucide-react";
+import SocialIcon from "@/components/SocialIcon";
+import { useSiteConfig } from "@/hooks/use-site-config";
+import { safeHref } from "@/lib/site-config";
 import { useUserAuth } from "@/contexts/UserAuthContext";
 import {
   DropdownMenu,
@@ -13,6 +15,8 @@ import {
 
 interface LayoutProps {
   children: ReactNode;
+  /** Hide the site footer (used by full-height, pane-based pages like a blog post). */
+  hideFooter?: boolean;
 }
 
 const navLinks = [
@@ -22,15 +26,16 @@ const navLinks = [
   { to: "/blog", label: "Blog" },
 ];
 
-const socialLinks = [
-  { href: "https://github.com/Manoo07", icon: Github, label: "GitHub" },
-  { href: "https://www.linkedin.com/in/manohar-boinapally-81a131205/", icon: Linkedin, label: "LinkedIn" },
-];
 
-const Layout = ({ children }: LayoutProps) => {
+
+const Layout = ({ children, hideFooter = false }: LayoutProps) => {
   const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const { currentUser, isLoggedIn, openAuthModal, logout } = useUserAuth();
+  const config = useSiteConfig();
+  const links = config.links.filter((l) => safeHref(l.url));
+  const headerLinks = links.filter((l) => l.showInHeader);
+  const external = (url: string) => (url.startsWith("mailto:") ? {} : { target: "_blank", rel: "noopener noreferrer" });
 
   const toggleMobileMenu = () => {
     setIsMobileMenuOpen(!isMobileMenuOpen);
@@ -42,14 +47,14 @@ const Layout = ({ children }: LayoutProps) => {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <header className="border-b border-border/50 sticky top-0 z-50 backdrop-blur-md bg-background/80">
+      <header className="border-b border-border sticky top-0 z-50 bg-secondary">
         <nav className="w-full px-4 sm:px-6 md:px-8 lg:px-12 xl:px-16 h-12 flex items-center justify-between">
           <Link
             to="/"
             className="font-mono text-sm font-semibold tracking-tight text-foreground hover:text-primary transition-colors"
             onClick={closeMobileMenu}
           >
-            ~/dev
+            {config.site.logoText}
           </Link>
           
           {/* Desktop Navigation */}
@@ -71,22 +76,18 @@ const Layout = ({ children }: LayoutProps) => {
             </div>
 
             <div className="flex items-center gap-3 pl-3 border-l border-border/50">
-              {socialLinks.map((social) => {
-                const Icon = social.icon;
-                return (
-                  <a
-                    key={social.href}
-                    href={social.href}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-muted-foreground hover:text-foreground transition-colors p-1.5 hover:bg-secondary/50 rounded-md"
-                    aria-label={social.label}
-                  >
-                    <Icon className="w-4 h-4" />
-                  </a>
-                );
-              })}
-              <ThemeToggle compact />
+              {headerLinks.map((social) => (
+                <a
+                  key={social.url}
+                  href={safeHref(social.url)}
+                  {...external(social.url)}
+                  className="text-muted-foreground hover:text-foreground transition-colors p-1.5 hover:bg-secondary/50 rounded-md"
+                  aria-label={social.label}
+                  title={social.label}
+                >
+                  <SocialIcon kind={social.kind} className="w-4 h-4" />
+                </a>
+              ))}
 
               {/* User auth */}
               {isLoggedIn && currentUser ? (
@@ -171,23 +172,18 @@ const Layout = ({ children }: LayoutProps) => {
               {/* Mobile Social Links */}
               <div className="pt-2 mt-3 border-t border-border/50">
                 <div className="flex items-center justify-between gap-4">
-                  {socialLinks.map((social) => {
-                    const Icon = social.icon;
-                    return (
-                      <a
-                        key={social.href}
-                        href={social.href}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={closeMobileMenu}
-                        className="flex items-center gap-2 py-2 px-3 rounded-md text-sm text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors"
-                      >
-                        <Icon className="w-4 h-4" />
-                        <span>{social.label}</span>
-                      </a>
-                    );
-                  })}
-                  <ThemeToggle compact={false} />
+                  {headerLinks.map((social) => (
+                    <a
+                      key={social.url}
+                      href={safeHref(social.url)}
+                      {...external(social.url)}
+                      onClick={closeMobileMenu}
+                      className="flex items-center gap-2 py-2 px-3 rounded-md text-sm text-muted-foreground hover:text-foreground hover:bg-secondary/50 transition-colors"
+                    >
+                      <SocialIcon kind={social.kind} className="w-4 h-4" />
+                      <span>{social.label}</span>
+                    </a>
+                  ))}
                 </div>
               </div>
 
@@ -235,18 +231,27 @@ const Layout = ({ children }: LayoutProps) => {
 
       <main className="flex-1">{children}</main>
 
+      {!hideFooter && (
       <footer className="border-t border-border/50 py-4 sm:py-6">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 lg:px-12 flex flex-col sm:flex-row items-center justify-between gap-3">
           <p className="text-xs text-muted-foreground text-center sm:text-left">
-            Built with curiosity, built for a cause.
+            {config.site.footerTagline}
           </p>
           <div className="flex items-center gap-4 sm:gap-5">
-            <a href="https://github.com/Manoo07" target="_blank" rel="noopener noreferrer" className="text-xs text-muted-foreground hover:text-foreground transition-colors">GitHub</a>
-            <a href="https://www.linkedin.com/in/manohar-boinapally-81a131205/" target="_blank" rel="noopener noreferrer" className="text-xs text-muted-foreground hover:text-foreground transition-colors">LinkedIn</a>
-            <a href="https://twitter.com" target="_blank" rel="noopener noreferrer" className="text-xs text-muted-foreground hover:text-foreground transition-colors">Twitter</a>
+            {links.map((l) => (
+              <a
+                key={l.url}
+                href={safeHref(l.url)}
+                {...external(l.url)}
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                {l.label}
+              </a>
+            ))}
           </div>
         </div>
       </footer>
+      )}
     </div>
   );
 };

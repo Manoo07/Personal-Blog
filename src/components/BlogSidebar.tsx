@@ -1,8 +1,13 @@
-import { useEffect, useState, useCallback, useRef } from "react";
-import { StickyNote, Highlighter, MessageSquare, ArrowRight } from "lucide-react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
+import { Link } from "react-router-dom";
+import { Search, X, ChevronRight, StickyNote, Highlighter, MessageSquare, ChevronsDownUp, ChevronsUpDown, PanelRightClose } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useNotes } from "@/hooks/use-api";
+import { useNotes, usePosts } from "@/hooks/use-api";
 import { scrollToHighlight } from "@/components/PostNotes";
+
+/**
+ * Obsidian-style right pane: search box + document outline (+ the user's notes).
+ */
 
 interface Heading {
   id: string;
@@ -10,271 +15,363 @@ interface Heading {
   level: number;
 }
 
+interface OutlineNode extends Heading {
+  children: OutlineNode[];
+}
+
 interface BlogSidebarProps {
   content: string;
   postSlug?: string;
   isLoggedIn?: boolean;
+  /** Desktop (lg+) pane visible */
+  open: boolean;
+  onClose: () => void;
+  /** Below lg: drawer visible */
+  mobileOpen: boolean;
+  onMobileClose: () => void;
 }
 
-const BlogSidebar = ({ content, postSlug, isLoggedIn }: BlogSidebarProps) => {
+/** Outline-wide collapse/expand broadcast (n bumps so repeats fire). */
+type OutlineCommand = { type: "collapse" | "expand"; n: number };
+
+/** Build a nested tree from a flat list of headings (like Obsidian's Outline). */
+function buildTree(headings: Heading[]): OutlineNode[] {
+  const root: OutlineNode[] = [];
+  const stack: OutlineNode[] = [];
+  for (const h of headings) {
+    const node: OutlineNode = { ...h, children: [] };
+    while (stack.length && stack[stack.length - 1].level >= h.level) stack.pop();
+    if (stack.length) stack[stack.length - 1].children.push(node);
+    else root.push(node);
+    stack.push(node);
+  }
+  return root;
+}
+
+const ROW =
+  "relative w-full text-left pl-[24px] pr-2 py-[3px] rounded-[4px] text-[13px] leading-[1.35] transition-colors duration-100";
+
+interface OutlineItemProps {
+  node: OutlineNode;
+  activeId: string;
+  onSelect: (id: string) => void;
+  command: OutlineCommand;
+  depth: number;
+}
+
+const OutlineItem = ({ node, activeId, onSelect, command, depth }: OutlineItemProps) => {
+  const [open, setOpen] = useState(true);
+  const hasChildren = node.children.length > 0;
+
+  // Header "collapse all / expand all"
+  useEffect(() => {
+    if (command.n === 0) return;
+    setOpen(command.type === "expand");
+     
+  }, [command]);
+
+  return (
+    <li>
+      <div className="relative">
+        {hasChildren && (
+          <button
+            type="button"
+            onClick={() => setOpen((o) => !o)}
+            className="absolute left-[4px] top-[3px] z-10 p-[1px] rounded text-muted-foreground hover:text-foreground"
+            aria-label={open ? "Collapse" : "Expand"}
+          >
+            <ChevronRight className={cn("w-[14px] h-[14px] transition-transform duration-100", open && "rotate-90")} />
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={() => onSelect(node.id)}
+          data-active={activeId === node.id ? "true" : undefined}
+          className={cn(
+            ROW,
+            activeId === node.id
+              ? "text-primary"
+              : "text-foreground/80 hover:bg-accent/50 hover:text-foreground"
+          )}
+        >
+          {node.text}
+        </button>
+      </div>
+      {hasChildren && open && (
+        <ul className="ml-[13px] border-l border-border">
+          {node.children.map((c) => (
+            <OutlineItem key={c.id} node={c} activeId={activeId} onSelect={onSelect} command={command} depth={depth + 1} />
+          ))}
+        </ul>
+      )}
+    </li>
+  );
+};
+
+const IconBtn = ({ label, onClick, children }: { label: string; onClick: () => void; children: React.ReactNode }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    title={label}
+    aria-label={label}
+    className="p-1.5 rounded-[4px] text-muted-foreground hover:text-foreground hover:bg-accent/60 transition-colors"
+  >
+    {children}
+  </button>
+);
+
+const BlogSidebar = ({ content, postSlug, isLoggedIn, open, onClose, mobileOpen, onMobileClose }: BlogSidebarProps) => {
+  const [command, setCommand] = useState<OutlineCommand>({ type: "expand", n: 0 });
+  const [allCollapsed, setAllCollapsed] = useState(false);
+  const searchRef = useRef<HTMLInputElement>(null);
   const [headings, setHeadings] = useState<Heading[]>([]);
-  const [activeId, setActiveId] = useState<string>("");
-  const [showNotes, setShowNotes] = useState(false);
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const itemRefs = useRef<Map<string, HTMLElement>>(new Map());
+  const [activeId, setActiveId] = useState("");
+  const [query, setQuery] = useState("");
+  const [showNotes, setShowNotes] = useState(true);
+  const outlineRef = useRef<HTMLDivElement>(null);
 
   const { data: notesData } = useNotes(postSlug ?? "");
   const notes = notesData?.notes ?? [];
 
-  // Parse headings from rendered markdown content
+  // Same query key as the Blog page so it's usually already cached
+  const { data: postsData } = usePosts({ limit: 100, sort: "order", order: "asc" });
+
+  // ── Parse headings from the rendered article ──
   const parseHeadings = useCallback(() => {
     const article = document.querySelector("article .prose");
     if (!article) return;
-
-    const headingElements = article.querySelectorAll("h2, h3, h4");
-    const headingData: Heading[] = [];
-
-    headingElements.forEach((heading, index) => {
-      const text = heading.textContent || "";
-      const slug = text
-        .toLowerCase()
-        .replace(/[^a-z0-9\s-]/g, "")
-        .replace(/\s+/g, "-")
-        .replace(/-+/g, "-")
-        .trim();
-
-      const id = `heading-${slug}-${index}`;
-      heading.id = id;
-
-      headingData.push({ id, text, level: parseInt(heading.tagName[1]) });
+    const found: Heading[] = [];
+    article.querySelectorAll("h1, h2, h3, h4, h5, h6").forEach((el, i) => {
+      const text = (el.textContent || "").trim();
+      if (!text) return; // ignore empty headings such as a stray "# "
+      const slug = text.toLowerCase().replace(/[^a-z0-9\s-]/g, "").replace(/\s+/g, "-").replace(/-+/g, "-");
+      const id = `heading-${slug}-${i}`;
+      el.id = id;
+      found.push({ id, text, level: parseInt(el.tagName[1]) });
     });
+    setHeadings(found);
+    if (found.length) setActiveId(found[0].id);
 
-    setHeadings(headingData);
-    if (headingData.length > 0) {
-      setActiveId(headingData[0].id);
+    // Deep link (#heading-…) from "Copy link to section": jump once ids exist
+    const hash = decodeURIComponent(window.location.hash.slice(1));
+    const target = hash ? document.getElementById(hash) : null;
+    if (target) {
+      window.scrollTo({ top: target.getBoundingClientRect().top + window.scrollY - 100 });
+      setActiveId(hash);
     }
   }, []);
 
   useEffect(() => {
-    const timer = setTimeout(parseHeadings, 150);
-    return () => clearTimeout(timer);
+    const t = setTimeout(parseHeadings, 150);
+    return () => clearTimeout(t);
   }, [content, parseHeadings]);
 
-  // ─── Track which heading the user is reading ───
+  const tree = useMemo(() => buildTree(headings), [headings]);
+
+  // ── Track the heading being read ──
   useEffect(() => {
-    if (headings.length === 0) return;
-
-    const handleScroll = () => {
-      const scrollY = window.scrollY;
-      let current = headings[0]?.id ?? "";
-
+    if (!headings.length) return;
+    const onScroll = () => {
+      let current = headings[0].id;
       for (const h of headings) {
         const el = document.getElementById(h.id);
-        if (el && el.getBoundingClientRect().top + window.scrollY <= scrollY + 130) {
-          current = h.id;
-        }
+        if (el && el.getBoundingClientRect().top <= 130) current = h.id;
       }
-
       setActiveId((prev) => (prev !== current ? current : prev));
     };
-
-    handleScroll();
-    window.addEventListener("scroll", handleScroll, { passive: true });
-    return () => window.removeEventListener("scroll", handleScroll);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
   }, [headings]);
 
-  // ─── Auto-scroll the TOC panel to keep the active item centred ───
+  // ── Keep the active outline row in view ──
   useEffect(() => {
-    const container = scrollContainerRef.current;
-    const activeItem = itemRefs.current.get(activeId);
-    if (!container || !activeItem) return;
-
-    const containerH = container.clientHeight;
-    const itemTop = activeItem.offsetTop;
-    const itemH = activeItem.clientHeight;
-
-    container.scrollTo({
-      top: Math.max(0, itemTop - containerH / 2 + itemH / 2),
-      behavior: "smooth",
-    });
-  }, [activeId]);
-
-  const handleClick = (id: string) => {
-    const el = document.getElementById(id);
-    if (el) {
-      window.scrollTo({
-        top: el.getBoundingClientRect().top + window.scrollY - 100,
+    const container = outlineRef.current;
+    const el = container?.querySelector<HTMLElement>('[data-active="true"]');
+    if (!container || !el) return;
+    const cRect = container.getBoundingClientRect();
+    const eRect = el.getBoundingClientRect();
+    if (eRect.top < cRect.top || eRect.bottom > cRect.bottom) {
+      container.scrollTo({
+        top: container.scrollTop + (eRect.top - cRect.top) - container.clientHeight / 2,
         behavior: "smooth",
       });
-      setActiveId(id);
     }
+  }, [activeId]);
+
+  const handleSelect = (id: string) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - 100, behavior: "smooth" });
+    setActiveId(id);
+    if (mobileOpen) onMobileClose();
   };
 
-  if (headings.length === 0 && (!isLoggedIn || notes.length === 0)) return null;
+  // ── Search over post titles / tags ──
+  const results = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return [];
+    return (postsData?.posts ?? [])
+      .filter((p) => p.title.toLowerCase().includes(q) || p.tags.some((t) => t.toLowerCase().includes(q)))
+      .slice(0, 30);
+  }, [query, postsData]);
 
-  // Group headings under their parent h2
-  const groups: { parent: Heading; children: Heading[] }[] = [];
-  let cur: (typeof groups)[number] | null = null;
+  const searching = query.trim().length > 0;
 
-  headings.forEach((h) => {
-    if (h.level === 2) {
-      if (cur) groups.push(cur);
-      cur = { parent: h, children: [] };
-    } else if (cur) {
-      cur.children.push(h);
-    }
-  });
-  if (cur) groups.push(cur);
-
-  const isActiveInGroup = (g: (typeof groups)[number]) =>
-    g.parent.id === activeId || g.children.some((c) => c.id === activeId);
+  const toggleAll = () => {
+    setCommand((c) => ({ type: allCollapsed ? "expand" : "collapse", n: c.n + 1 }));
+    setAllCollapsed((v) => !v);
+  };
 
   return (
-    <aside className="hidden lg:block">
-      <nav className="fixed top-24 right-4 xl:right-8 w-48 xl:w-56 flex flex-col gap-2 max-h-[calc(100vh-7rem)] overflow-hidden">
-        <div className="rounded-lg border border-border/40 bg-card/50 backdrop-blur-sm flex flex-col min-h-0 flex-1">
-          <div className="px-3 pt-3 pb-1.5 flex-shrink-0">
-            <h4 className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider">
-              Table of Contents
-            </h4>
-          </div>
+    <>
+    {mobileOpen && <div className="lg:hidden fixed inset-0 z-[55] bg-foreground/20" onClick={onMobileClose} />}
+    <aside
+      aria-hidden={!open && !mobileOpen}
+      className={cn(
+        "fixed right-0 top-[49px] bottom-0 w-[300px] max-w-[85vw] bg-secondary border-l border-border flex-col",
+        "transition-transform duration-200 ease-out",
+        mobileOpen ? "flex z-[60] shadow-xl lg:shadow-none lg:z-30" : "hidden lg:flex z-30",
+        !open && !mobileOpen && "lg:translate-x-full lg:invisible"
+      )}
+    >
+      {/* Pane header */}
+      <div className="shrink-0 flex items-center justify-center gap-1 h-10 px-2">
+        <IconBtn label="Search posts" onClick={() => searchRef.current?.focus()}>
+          <Search className="w-[18px] h-[18px]" strokeWidth={1.75} />
+        </IconBtn>
+        <IconBtn label={allCollapsed ? "Expand all headings" : "Collapse all headings"} onClick={toggleAll}>
+          {allCollapsed ? (
+            <ChevronsUpDown className="w-[18px] h-[18px]" strokeWidth={1.75} />
+          ) : (
+            <ChevronsDownUp className="w-[18px] h-[18px]" strokeWidth={1.75} />
+          )}
+        </IconBtn>
+        <IconBtn
+          label={mobileOpen ? "Close" : "Collapse right sidebar"}
+          onClick={mobileOpen ? onMobileClose : onClose}
+        >
+          {mobileOpen ? (
+            <X className="w-[18px] h-[18px]" strokeWidth={1.75} />
+          ) : (
+            <PanelRightClose className="w-[18px] h-[18px]" strokeWidth={1.75} />
+          )}
+        </IconBtn>
+      </div>
 
-          {/* ── scrollable list ── */}
-          <div
-            ref={scrollContainerRef}
-            className="flex-1 min-h-0 overflow-y-auto scroll-smooth px-3 pb-3 scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent"
-          >
-            <ul className="space-y-0.5 text-[11px]">
-              {groups.map((group, gi) => (
-                <li
-                  key={group.parent.id}
-                  ref={(el) => {
-                    if (el) itemRefs.current.set(group.parent.id, el);
-                  }}
-                >
-                  {/* h2 heading */}
-                  <button
-                    onClick={() => handleClick(group.parent.id)}
+      {/* Search */}
+      <div className="shrink-0 px-2.5 pb-1.5">
+        <label className="relative flex items-center">
+          <Search className="absolute left-2.5 w-4 h-4 text-muted-foreground pointer-events-none" />
+          <input
+            ref={searchRef}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => e.key === "Escape" && setQuery("")}
+            placeholder="Search..."
+            className="w-full h-[28px] pl-8 pr-7 rounded-full bg-[hsl(0_0%_96%)] border border-input/60 text-[13px] text-foreground placeholder:text-muted-foreground outline-none focus:border-input focus:ring-2 focus:ring-input/20 transition-shadow"
+          />
+          {searching && (
+            <button
+              type="button"
+              onClick={() => setQuery("")}
+              className="absolute right-2 p-0.5 rounded text-muted-foreground hover:text-foreground"
+              aria-label="Clear search"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </label>
+      </div>
+
+      {/* Search results OR outline */}
+      <div ref={outlineRef} className="flex-1 min-h-0 overflow-y-auto scrollbar-thin px-2.5 pb-4">
+        {searching ? (
+          results.length === 0 ? (
+            <p className="px-2 pt-3 text-[13px] text-muted-foreground">No matches found.</p>
+          ) : (
+            <ul>
+              {results.map((p) => (
+                <li key={p.slug}>
+                  <Link
+                    to={`/blog/${p.slug}`}
+                    onClick={() => setQuery("")}
                     className={cn(
-                      "text-left w-full py-1 px-1.5 rounded transition-all duration-200 flex items-start gap-1",
-                      "hover:text-primary",
-                      activeId === group.parent.id
-                        ? "text-primary font-medium bg-primary/10"
-                        : "text-muted-foreground"
+                      "block px-2 py-[3px] rounded-[4px] hover:bg-accent/60 transition-colors",
+                      p.slug === postSlug && "bg-accent"
                     )}
                   >
-                    <span className="text-[10px] text-muted-foreground/60 w-4 flex-shrink-0">
-                      {gi + 1}.
-                    </span>
-                    <span className="line-clamp-2 leading-snug">{group.parent.text}</span>
-                  </button>
-
-                  {/* h3 / h4 children */}
-                  {group.children.length > 0 && (
-                    <ul
-                      className={cn(
-                        "ml-3 mt-0.5 space-y-0 border-l pl-2 transition-all duration-200",
-                        isActiveInGroup(group)
-                          ? "border-primary/40 opacity-100"
-                          : "border-border/30 opacity-60"
-                      )}
-                    >
-                      {group.children.map((child) => (
-                        <li
-                          key={child.id}
-                          ref={(el) => {
-                            if (el) itemRefs.current.set(child.id, el);
-                          }}
-                        >
-                          <button
-                            onClick={() => handleClick(child.id)}
-                            className={cn(
-                              "text-left w-full py-0.5 px-1 rounded transition-all duration-200 text-[10px]",
-                              "hover:text-primary",
-                              child.level === 4 && "pl-2",
-                              activeId === child.id
-                                ? "text-primary font-medium bg-primary/10"
-                                : "text-muted-foreground"
-                            )}
-                          >
-                            <span className="line-clamp-1 leading-snug">{child.text}</span>
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
+                    <span className="block text-[13px] leading-[1.35] text-foreground">{p.title}</span>
+                    {p.section && (
+                      <span className="block text-[11.5px] text-muted-foreground mt-0.5">{p.section.name}</span>
+                    )}
+                  </Link>
                 </li>
               ))}
             </ul>
-          </div>
-        </div>
-
-        {/* ── My Notes panel (logged-in users only) ── */}
-        {isLoggedIn && postSlug && (
-          <div className="rounded-lg border border-border/40 bg-card/50 backdrop-blur-sm flex-shrink-0">
-            <button
-              onClick={() => setShowNotes((v) => !v)}
-              className="w-full flex items-center justify-between px-3 py-2.5 text-left hover:bg-muted/30 rounded-lg transition-colors"
-            >
-              <div className="flex items-center gap-1.5">
-                <StickyNote className="w-3 h-3 text-muted-foreground" />
-                <span className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider">
-                  My Notes
-                </span>
-              </div>
-              {notes.length > 0 && (
-                <span className="text-[9px] font-medium bg-amber-400/20 text-amber-600 dark:text-amber-400 px-1.5 py-0.5 rounded-full">
-                  {notes.length}
-                </span>
-              )}
-            </button>
-
-            {showNotes && (
-              <div className="px-2 pb-2.5 space-y-1.5 max-h-52 overflow-y-auto scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent">
-                {notes.length === 0 ? (
-                  <p className="text-[10px] text-muted-foreground/60 italic text-center py-3">
-                    Select any text to highlight or add a note
-                  </p>
-                ) : (
-                  notes.map((n) => (
-                    <button
-                      key={n.id}
-                      onClick={() => scrollToHighlight(n.id)}
-                      className="group w-full text-left rounded-md border border-border/30 bg-background/60 p-2 text-[11px] space-y-1 hover:border-amber-400/50 hover:bg-amber-400/5 transition-colors"
-                    >
-                      {/* Quoted text */}
-                      <p className="text-muted-foreground/70 italic line-clamp-2 border-l-2 border-amber-400/50 pl-1.5 leading-snug">
-                        "{n.selectedText}"
-                      </p>
-
-                      {/* Note body or "Highlight only" badge */}
-                      {n.note ? (
-                        <p className="text-foreground leading-snug line-clamp-2">{n.note}</p>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 text-[9px] text-amber-600 dark:text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded-full">
-                          <Highlighter className="w-2.5 h-2.5" /> Highlight only
-                        </span>
-                      )}
-
-                      {/* Footer */}
-                      <div className="flex items-center justify-between pt-0.5">
-                        <div className="flex items-center gap-1 text-[9px] text-muted-foreground/50">
-                          {n.note
-                            ? <MessageSquare className="w-2.5 h-2.5" />
-                            : <Highlighter className="w-2.5 h-2.5" />}
-                          {new Date(n.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                        </div>
-                        <ArrowRight className="w-3 h-3 text-muted-foreground/30 group-hover:text-amber-500 transition-colors" />
-                      </div>
-                    </button>
-                  ))
-                )}
-              </div>
-            )}
-          </div>
+          )
+        ) : tree.length === 0 ? (
+          <p className="px-2 pt-3 text-[13px] text-muted-foreground">No headings found.</p>
+        ) : (
+          <ul className="pt-1">
+            {tree.map((n) => (
+              <OutlineItem key={n.id} node={n} activeId={activeId} onSelect={handleSelect} command={command} depth={0} />
+            ))}
+          </ul>
         )}
-      </nav>
+      </div>
+
+      {/* My notes (logged-in only) */}
+      {isLoggedIn && postSlug && (
+        <div className="shrink-0 border-t border-border max-h-[40%] flex flex-col pb-9">
+          <button
+            type="button"
+            onClick={() => setShowNotes((v) => !v)}
+            className="shrink-0 flex items-center gap-2 h-10 px-4 text-[13px] text-foreground/85 hover:text-foreground"
+          >
+            <ChevronRight className={cn("w-[14px] h-[14px] text-muted-foreground transition-transform", showNotes && "rotate-90")} />
+            <StickyNote className="w-3.5 h-3.5 text-muted-foreground" />
+            <span className="font-medium">My notes</span>
+            {notes.length > 0 && (
+              <span className="ml-auto text-[11px] px-1.5 rounded-full bg-tag text-primary tabular-nums">
+                {notes.length}
+              </span>
+            )}
+          </button>
+          {showNotes && (
+            <div className="min-h-0 overflow-y-auto scrollbar-thin px-2.5 pb-3 space-y-1.5">
+              {notes.length === 0 ? (
+                <p className="px-2 text-[12px] text-muted-foreground">Select text and right-click to highlight it or add a note.</p>
+              ) : (
+                notes.map((n) => (
+                  <button
+                    key={n.id}
+                    type="button"
+                    onClick={() => scrollToHighlight(n.id)}
+                    className="w-full text-left rounded-[4px] px-2 py-1.5 hover:bg-accent/60 transition-colors space-y-1"
+                  >
+                    <p className="text-[12px] text-muted-foreground italic line-clamp-2 border-l-2 border-primary/60 pl-2">
+                      {n.selectedText}
+                    </p>
+                    {n.note ? (
+                      <p className="text-[12.5px] text-foreground line-clamp-2 flex gap-1.5">
+                        <MessageSquare className="w-3 h-3 mt-0.5 shrink-0 text-muted-foreground" />
+                        {n.note}
+                      </p>
+                    ) : (
+                      <p className="text-[11px] text-muted-foreground flex items-center gap-1">
+                        <Highlighter className="w-3 h-3" /> Highlight only
+                      </p>
+                    )}
+                  </button>
+                ))
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </aside>
+    </>
   );
 };
 

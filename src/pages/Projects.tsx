@@ -3,9 +3,12 @@ import GitHubProjectCard from "@/components/GitHubProjectCard";
 import Breadcrumb from "@/components/Breadcrumb";
 import { useGitHubRepos } from "@/hooks/use-github";
 import { Loader2, FileText, Github } from "lucide-react";
+import { useSiteConfig } from "@/hooks/use-site-config";
 
 const Projects = () => {
-  const { data: githubProjects, isLoading, isError } = useGitHubRepos(8);
+  const config = useSiteConfig();
+  const username = config.site.githubUsername;
+  const { data: githubProjects, isLoading, isError } = useGitHubRepos(8, username);
 
   return (
     <Layout>
@@ -17,7 +20,7 @@ const Projects = () => {
           </h1>
           <p className="text-sm text-muted-foreground flex items-center gap-2">
             <Github className="w-4 h-4" />
-            Recent repositories from my GitHub
+            {config.site.projectsSubtitle}
           </p>
         </div>
 
@@ -53,7 +56,7 @@ const Projects = () => {
         {!isLoading && !isError && githubProjects && githubProjects.length > 0 && (
           <div className="text-center mt-8">
             <a
-              href="https://github.com/Manoo07"
+              href={`https://github.com/${encodeURIComponent(username)}`}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-2 text-sm text-primary hover:underline"

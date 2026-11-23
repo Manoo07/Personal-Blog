@@ -6,10 +6,14 @@ import { usePosts } from "@/hooks/use-api";
 import { useGitHubRepos } from "@/hooks/use-github";
 import { getAssetPath } from "@/lib/assets";
 import { ArrowRight, Loader2, FileText } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import { useSiteConfig } from "@/hooks/use-site-config";
 
 const Index = () => {
   const { data: postsData, isLoading: postsLoading } = usePosts({ limit: 5, sort: "order", order: "asc" });
-  const { data: githubProjects } = useGitHubRepos(4);
+  const config = useSiteConfig();
+  const { profile, home } = config;
+  const { data: githubProjects } = useGitHubRepos(4, config.site.githubUsername);
   const recentPosts = postsData?.posts || [];
   const featuredProjects = githubProjects?.slice(0, 2) || [];
 
@@ -20,35 +24,32 @@ const Index = () => {
         <div className="grid lg:grid-cols-2 gap-8 sm:gap-12 items-center">
           {/* Left: Content */}
           <div className="animate-fade-in text-center lg:text-left">
-            <p className="font-mono text-xs text-primary mb-2">Hi, I'm</p>
+            <p className="font-mono text-xs text-primary mb-2">{home.greeting}</p>
             <h1 className="text-2xl sm:text-3xl lg:text-4xl xl:text-5xl font-bold text-foreground leading-tight mb-4">
-              Manohar Boinapally
-              <br />
-              <span className="text-muted-foreground">Software Engineer</span>
+              {profile.name}
+              {profile.title && (
+                <>
+                  <br />
+                  <span className="text-muted-foreground">{profile.title}</span>
+                </>
+              )}
             </h1>
-            <p className="text-sm sm:text-base text-muted-foreground max-w-lg mx-auto lg:mx-0 leading-relaxed mb-3">
-              I'm passionate about technology and continuous learning. I enjoy understanding how
-              things work behind the scenes and turning ideas into practical solutions. My focus
-              is on building strong fundamentals and applying them to real-world problems.
-            </p>
-            <p className="text-sm sm:text-base text-muted-foreground max-w-lg mx-auto lg:mx-0 leading-relaxed mb-5">
-              Through this blog, I share what I learn, the challenges I face, and the solutions
-              I discover along the way. My goal is to simplify technical concepts and make them
-              easy to understand for everyone.
-            </p>
+            <div className="text-sm sm:text-base text-muted-foreground max-w-lg mx-auto lg:mx-0 leading-relaxed mb-5 space-y-3 [&_a]:text-link [&_a]:underline [&_strong]:text-foreground">
+              <ReactMarkdown>{home.intro}</ReactMarkdown>
+            </div>
             <div className="flex flex-col sm:flex-row items-center gap-3 justify-center lg:justify-start">
               <Link
                 to="/blog"
                 className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2 rounded bg-primary text-primary-foreground font-medium text-sm hover:opacity-90 transition-opacity"
               >
-                Read the blog
+                {home.primaryCta}
                 <ArrowRight className="w-3.5 h-3.5" />
               </Link>
               <Link
                 to="/about"
                 className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2 rounded border border-border text-foreground font-medium text-sm hover:bg-secondary transition-colors"
               >
-                About me
+                {home.secondaryCta}
               </Link>
             </div>
           </div>
@@ -62,8 +63,8 @@ const Index = () => {
               {/* Image container with glassmorphism */}
               <div className="relative backdrop-blur-sm bg-card/20 p-2 rounded-2xl border border-border/50 shadow-2xl">
                 <img 
-                  src={getAssetPath("image.png")} 
-                  alt="Manohar Boinapally" 
+                  src={profile.avatarUrl || getAssetPath("image.png")}
+                  alt={profile.name}
                   className="w-full h-auto rounded-xl object-contain"
                 />
               </div>
@@ -76,7 +77,7 @@ const Index = () => {
       <section className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 lg:px-12 pb-8 sm:pb-10">
         <div className="flex items-center justify-between mb-3 sm:mb-4">
           <h2 className="text-lg sm:text-xl font-bold text-foreground">
-            Recent Writing
+            {home.recentPostsTitle}
           </h2>
           <Link
             to="/blog"
@@ -122,7 +123,7 @@ const Index = () => {
       <section className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 lg:px-12 pb-8 sm:pb-12">
         <div className="flex items-center justify-between mb-3 sm:mb-4">
           <h2 className="text-lg sm:text-xl font-bold text-foreground">
-            Featured Projects
+            {home.projectsTitle}
           </h2>
           <Link
             to="/projects"

@@ -63,6 +63,17 @@ export default {
           ring: "hsl(var(--sidebar-ring))",
         },
         surface: "hsl(var(--surface))",
+        faint: "hsl(var(--faint))",
+        "secondary-alt": "hsl(var(--secondary-alt))",
+        link: "hsl(var(--link))",
+        tag: "hsl(var(--tag-bg))",
+        heading: {
+          1: "hsl(var(--h1))",
+          2: "hsl(var(--h2))",
+          3: "hsl(var(--h3))",
+          4: "hsl(var(--h4))",
+          5: "hsl(var(--h5))",
+        },
         highlight: {
           DEFAULT: "hsl(var(--highlight))",
           muted: "hsl(var(--highlight-muted))",

@@ -52,15 +52,15 @@ export class GitHubAPI {
     }
   }
 
-  async getPublicRepos(limit: number = 30): Promise<GitHubRepo[]> {
-    const url = `${GITHUB_API_BASE}/users/${GITHUB_USERNAME}/repos?type=public&sort=updated&per_page=${limit}`;
+  async getPublicRepos(limit: number = 30, username: string = GITHUB_USERNAME): Promise<GitHubRepo[]> {
+    const url = `${GITHUB_API_BASE}/users/${encodeURIComponent(username)}/repos?type=public&sort=updated&per_page=${limit}`;
     return this.fetchWithErrorHandling<GitHubRepo[]>(url);
   }
 
-  async getRecentRepos(limit: number = 6): Promise<ProjectFromRepo[]> {
+  async getRecentRepos(limit: number = 6, username?: string): Promise<ProjectFromRepo[]> {
     try {
       // Fetch a larger pool so filtering still leaves enough results
-      const repos = await this.getPublicRepos(50);
+      const repos = await this.getPublicRepos(50, username?.trim() || GITHUB_USERNAME);
       
       return repos
         .filter(repo => !repo.fork) // Exclude forks

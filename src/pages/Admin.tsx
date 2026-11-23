@@ -4,9 +4,10 @@ import Layout from "@/components/Layout";
 import Breadcrumb from "@/components/Breadcrumb";
 import TagInput from "@/components/TagInput";
 import SectionTreeDropdown from "@/components/SectionTreeDropdown";
-import { Pencil, Trash2, Plus, Save, Eye, Code, LogOut, Loader2, Globe, FileText, FolderTree, ImagePlus, ChevronUp, ChevronDown } from "lucide-react";
+import { Pencil, Trash2, Plus, Save, Eye, Code, LogOut, Loader2, Globe, FileText, FolderTree, ImagePlus, Settings2, ChevronUp, ChevronDown } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import remarkObsidian from "@/lib/remark-obsidian";
 import rehypeHighlight from "rehype-highlight";
 import {
   useLogin,
@@ -23,6 +24,13 @@ import {
   useSectionTree,
 } from "@/hooks/use-api";
 import { isAuthenticated, getToken, api } from "@/lib/api";
+import {
+  ALLOWED_IMAGE_TYPES,
+  prepareImageForUpload,
+  withSensibleName,
+  altFromFilename,
+  ImagePrepError,
+} from "@/lib/image-upload";
 import type { ApiPost, CreatePostRequest, UpdatePostRequest } from "@/lib/api";
 
 type View = "list" | "edit";
@@ -48,6 +56,8 @@ const Admin = () => {
   const [showPreview, setShowPreview] = useState(false);
   const [view, setView] = useState<View>("list");
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploadingCount, setUploadingCount] = useState(0);
+  const [isDraggingImage, setIsDraggingImage] = useState(false);
   const [adminPage, setAdminPage] = useState(0);
   const POSTS_PER_PAGE = 15;
   const contentTextareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -310,27 +320,74 @@ const Admin = () => {
     }
   };
 
+  /** Insert text at the textarea caret using a functional update (safe across awaits). */
   const insertIntoContentAtCursor = (textToInsert: string) => {
-    if (!editingPost) return;
-
     const textarea = contentTextareaRef.current;
-    const value = editingPost.content;
+    let caret = 0;
+    setEditingPost((prev) => {
+      if (!prev) return prev;
+      const value = prev.content;
+      const start = textarea ? textarea.selectionStart ?? value.length : value.length;
+      const end = textarea ? textarea.selectionEnd ?? value.length : value.length;
+      caret = start + textToInsert.length;
+      return { ...prev, content: `${value.slice(0, start)}${textToInsert}${value.slice(end)}` };
+    });
+    requestAnimationFrame(() => {
+      if (!textarea) return;
+      textarea.focus();
+      textarea.setSelectionRange(caret, caret);
+    });
+  };
 
-    if (!textarea) {
-      updateField("content", `${value}${value.endsWith("\n") ? "" : "\n"}${textToInsert}`);
+  /** Swap a placeholder for its final text (or remove it) wherever it now is. */
+  const replaceInContent = (placeholder: string, replacement: string) => {
+    setEditingPost((prev) =>
+      prev ? { ...prev, content: prev.content.replace(placeholder, replacement) } : prev
+    );
+  };
+
+  /**
+   * Upload one or more images and embed them as markdown at the caret.
+   * A visible placeholder is inserted immediately so you can keep writing.
+   */
+  const uploadImages = async (files: File[]) => {
+    const images = files.filter((f) => f.type.startsWith("image/"));
+    if (images.length === 0) {
+      setUploadError("Only image files can be added here.");
       return;
     }
+    setUploadError(null);
 
-    const start = textarea.selectionStart ?? value.length;
-    const end = textarea.selectionEnd ?? value.length;
-    const nextValue = `${value.slice(0, start)}${textToInsert}${value.slice(end)}`;
-    updateField("content", nextValue);
-
-    requestAnimationFrame(() => {
-      const position = start + textToInsert.length;
-      textarea.focus();
-      textarea.setSelectionRange(position, position);
+    const jobs = images.map((raw) => {
+      const file = withSensibleName(raw);
+      const token = Math.random().toString(36).slice(2, 8);
+      const placeholder = `![Uploading ${file.name}…](uploading-${token})`;
+      return { file, placeholder };
     });
+
+    insertIntoContentAtCursor(`\n${jobs.map((j) => j.placeholder).join("\n\n")}\n`);
+    setUploadingCount((n) => n + jobs.length);
+
+    const errors: string[] = [];
+    await Promise.all(
+      jobs.map(async ({ file, placeholder }) => {
+        try {
+          const ready = await prepareImageForUpload(file);
+          const uploaded = await uploadImageMutation.mutateAsync(ready);
+          replaceInContent(placeholder, `![${altFromFilename(file.name)}](${uploaded.url})`);
+        } catch (err) {
+          replaceInContent(placeholder, "");
+          const reason =
+            err instanceof ImagePrepError
+              ? err.message
+              : `"${file.name}": ${err instanceof Error ? err.message : "upload failed"}`;
+          errors.push(reason);
+        } finally {
+          setUploadingCount((n) => n - 1);
+        }
+      })
+    );
+    if (errors.length) setUploadError(errors.join(" · "));
   };
 
   const handleImagePick = () => {
@@ -339,27 +396,45 @@ const Admin = () => {
   };
 
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
+    const files = Array.from(event.target.files ?? []);
     event.target.value = "";
+    if (files.length) await uploadImages(files);
+  };
 
-    if (!file) return;
+  const handleContentPaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const files = Array.from(e.clipboardData.files).filter((f) => f.type.startsWith("image/"));
+    if (files.length === 0) return; // normal text paste
+    e.preventDefault();
+    uploadImages(files);
+  };
 
-    if (!file.type.startsWith("image/")) {
-      setUploadError("Please select a valid image file.");
-      return;
-    }
+  const handleContentDrop = (e: React.DragEvent<HTMLTextAreaElement>) => {
+    setIsDraggingImage(false);
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length === 0) return;
+    e.preventDefault();
+    // Put the caret where the files were dropped (best effort: end if unknown)
+    contentTextareaRef.current?.focus();
+    uploadImages(files);
+  };
 
-    try {
-      setUploadError(null);
-      const uploaded = await uploadImageMutation.mutateAsync(file);
-      const altText = file.name.replace(/\.[^.]+$/, "").replace(/[-_]+/g, " ").trim() || "image";
-      const markdown = `\n![${altText}](${uploaded.url})\n`;
-      insertIntoContentAtCursor(markdown);
-    } catch (error) {
-      setUploadError(
-        uploadImageMutation.error?.message || "Image upload failed. Please try again."
-      );
-    }
+  const contentTextareaProps = {
+    ref: contentTextareaRef,
+    value: editingPost?.content ?? "",
+    onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => updateField("content", e.target.value),
+    onPaste: handleContentPaste,
+    onDrop: handleContentDrop,
+    onDragOver: (e: React.DragEvent) => {
+      if (Array.from(e.dataTransfer.types).includes("Files")) {
+        e.preventDefault();
+        setIsDraggingImage(true);
+      }
+    },
+    onDragLeave: () => setIsDraggingImage(false),
+    className: `w-full h-[320px] sm:h-[400px] px-3 py-2 rounded-md bg-background border text-foreground font-mono text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-primary transition-shadow resize-none ${
+      isDraggingImage ? "border-primary border-dashed ring-2 ring-primary/30" : "border-border"
+    }`,
+    placeholder: "# Heading\n\nWrite your post in **Markdown**…\n\nPaste or drop images right here.",
   };
 
   const getSectionKey = (post: { sectionId?: string | null; section?: { id: string } | null }) =>
@@ -502,25 +577,26 @@ const Admin = () => {
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept="image/*"
+                  accept={ALLOWED_IMAGE_TYPES.join(",")}
+                  multiple
                   className="hidden"
                   onChange={handleImageUpload}
                 />
                 <button
                   type="button"
                   onClick={handleImagePick}
-                  disabled={uploadImageMutation.isPending}
+                  disabled={uploadingCount > 0}
                   className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-border/60 text-xs text-foreground hover:bg-secondary transition-colors disabled:opacity-50"
                 >
-                  {uploadImageMutation.isPending ? (
+                  {uploadingCount > 0 ? (
                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
                   ) : (
                     <ImagePlus className="w-3.5 h-3.5" />
                   )}
-                  Upload image
+                  {uploadingCount > 0 ? `Uploading ${uploadingCount}…` : "Add images"}
                 </button>
                 <span className="text-xs text-muted-foreground">
-                  Inserts `![alt](url)` into markdown.
+                  or paste / drag images into the editor · PNG, JPEG, GIF, WebP, AVIF · large images are compressed to fit 2 MB
                 </span>
               </div>
               {uploadError && (
@@ -529,18 +605,12 @@ const Admin = () => {
               {showPreview ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
-                    <textarea
-                      ref={contentTextareaRef}
-                      value={editingPost.content}
-                      onChange={(e) => updateField("content", e.target.value)}
-                      className="w-full h-[320px] sm:h-[400px] px-3 py-2 rounded-md bg-background border border-border text-foreground font-mono text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-primary transition-shadow resize-none"
-                      placeholder={"# Heading\n\nWrite your post in **Markdown**..."}
-                    />
+                    <textarea {...contentTextareaProps} />
                   </div>
                   <div>
                     <div className="h-[320px] sm:h-[400px] px-4 py-3 rounded-md bg-background border border-border overflow-auto">
-                      <article className="prose prose-slate dark:prose-invert max-w-none prose-headings:font-bold prose-h1:text-2xl prose-h2:text-xl prose-h3:text-lg prose-p:text-sm prose-p:leading-relaxed prose-a:text-primary prose-strong:text-foreground prose-code:text-sm prose-pre:text-sm prose-li:text-sm">
-                        <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
+                      <article className="prose max-w-none">
+                        <ReactMarkdown remarkPlugins={[remarkGfm, remarkObsidian]} rehypePlugins={[rehypeHighlight]}>
                           {editingPost.content || "*Start writing to see preview...*"}
                         </ReactMarkdown>
                       </article>
@@ -548,13 +618,7 @@ const Admin = () => {
                   </div>
                 </div>
               ) : (
-                <textarea
-                  ref={contentTextareaRef}
-                  value={editingPost.content}
-                  onChange={(e) => updateField("content", e.target.value)}
-                  className="w-full h-[320px] sm:h-[400px] px-3 py-2 rounded-md bg-background border border-border text-foreground font-mono text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-primary transition-shadow resize-none"
-                  placeholder={"# Heading\n\nWrite your post in **Markdown**..."}
-                />
+                <textarea {...contentTextareaProps} />
               )}
             </div>
 
@@ -632,7 +696,7 @@ const Admin = () => {
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-1">Admin</h1>
             <p className="text-sm text-muted-foreground">
-              Manage your blog posts.
+              Manage your blog posts. Profile, About, experience and links live under Site content.
             </p>
           </div>
           <div className="flex gap-2">
@@ -649,6 +713,13 @@ const Admin = () => {
             >
               <FolderTree className="w-3.5 h-3.5" />
               <span className="hidden xs:inline">Sections</span>
+            </Link>
+            <Link
+              to="/manohar/site"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border border-border/40 text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+            >
+              <Settings2 className="w-3.5 h-3.5" />
+              <span className="hidden xs:inline">Site content</span>
             </Link>
             <button
               onClick={handleCreate}

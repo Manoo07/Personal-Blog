@@ -11,6 +11,7 @@ import BlogPost from "./pages/BlogPost";
 import Projects from "./pages/Projects";
 import Admin from "./pages/Admin";
 import AdminSections from "./pages/AdminSections";
+import AdminSite from "./pages/AdminSite";
 import Dashboard from "./pages/Dashboard";
 import NotFound from "./pages/NotFound";
 import { UserAuthProvider } from "@/contexts/UserAuthContext";
@@ -27,7 +28,7 @@ const queryClient = new QueryClient({
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+    <ThemeProvider attribute="class" forcedTheme="light" defaultTheme="light" enableSystem={false} disableTransitionOnChange>
       <TooltipProvider>
         <UserAuthProvider>
           <Toaster />
@@ -50,6 +51,7 @@ const App = () => (
               <Route path="/mano-admin" element={<Admin />} />
               <Route path="/manohar" element={<Admin />} />
               <Route path="/manohar/sections" element={<AdminSections />} />
+              <Route path="/manohar/site" element={<AdminSite />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>

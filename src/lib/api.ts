@@ -430,6 +430,15 @@ class ApiClient {
     return response.json();
   }
 
+  // Site content (profile, home, about, links…)
+  async getSiteConfig(): Promise<{ config: unknown; updatedAt: string | null }> {
+    return this.request("/api/site");
+  }
+
+  async updateSiteConfig(config: unknown): Promise<{ config: unknown; updatedAt: string }> {
+    return this.request("/api/admin/site", { method: "PUT", body: JSON.stringify({ config }) });
+  }
+
   // Health check
   async health(): Promise<{ status: string }> {
     return this.request("/health");
@@ -468,7 +477,7 @@ class ApiClient {
     limit?: number;
     offset?: number;
     tag?: string;
-    sort?: "createdAt" | "updatedAt" | "title";
+    sort?: "createdAt" | "updatedAt" | "title" | "order";
     order?: "asc" | "desc";
   }): Promise<PostListResponse> {
     const searchParams = new URLSearchParams();
@@ -497,7 +506,7 @@ class ApiClient {
     limit?: number;
     offset?: number;
     tag?: string;
-    sort?: "createdAt" | "updatedAt" | "title";
+    sort?: "createdAt" | "updatedAt" | "title" | "order";
     order?: "asc" | "desc";
   }): Promise<PostListResponse> {
     const searchParams = new URLSearchParams();

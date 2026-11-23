@@ -58,7 +58,7 @@ export function usePosts(params?: {
   limit?: number;
   offset?: number;
   tag?: string;
-  sort?: "createdAt" | "updatedAt" | "title";
+  sort?: "createdAt" | "updatedAt" | "title" | "order";
   order?: "asc" | "desc";
 }) {
   return useQuery<PostListResponse, ApiClientError>({
@@ -93,7 +93,7 @@ export function useAdminPosts(params?: {
   limit?: number;
   offset?: number;
   tag?: string;
-  sort?: "createdAt" | "updatedAt" | "title";
+  sort?: "createdAt" | "updatedAt" | "title" | "order";
   order?: "asc" | "desc";
 }) {
   return useQuery<PostListResponse, ApiClientError>({

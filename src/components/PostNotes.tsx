@@ -1,8 +1,9 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import {
   Highlighter, MessageSquarePlus, Pencil, Trash2,
-  X, Loader2, Check, AlertTriangle,
+  X, Loader2, Check, AlertTriangle, Copy, Quote, Link2, Palette, LogIn, MessageSquareX,
 } from "lucide-react";
+import ContextMenu, { type MenuEntry } from "@/components/ContextMenu";
 import { toast } from "sonner";
 import { useCreateNote, useNotes, useUpdateNote, useDeleteNote } from "@/hooks/use-api";
 import type { ApiNote } from "@/lib/api";
@@ -10,6 +11,35 @@ import type { ApiNote } from "@/lib/api";
 interface Props {
   postSlug: string;
   articleRef: React.RefObject<HTMLElement | null>;
+  /** Signed-out readers still get the right-click menu (copy actions). */
+  isLoggedIn: boolean;
+  onRequireLogin: () => void;
+}
+
+/** Right-click menu target: a text selection or an existing highlight. */
+type MenuState =
+  | { kind: "selection"; x: number; y: number; text: string; rect: DOMRect; headingId: string | null }
+  | { kind: "mark"; x: number; y: number; noteId: string; rect: DOMRect; headingId: string | null };
+
+/** Id of the closest heading at or above `node` inside the article (for section links). */
+function nearestHeadingId(article: HTMLElement, node: Node): string | null {
+  const headings = Array.from(article.querySelectorAll<HTMLElement>("h1[id], h2[id], h3[id], h4[id], h5[id], h6[id]"));
+  let found: string | null = null;
+  for (const h of headings) {
+    // DOCUMENT_POSITION_FOLLOWING (4): node comes after h
+    if (h === node || h.contains(node) || h.compareDocumentPosition(node) & Node.DOCUMENT_POSITION_FOLLOWING) found = h.id;
+    else break;
+  }
+  return found;
+}
+
+async function copyText(text: string, okMessage = "Copied") {
+  try {
+    await navigator.clipboard.writeText(text);
+    toast.success(okMessage);
+  } catch {
+    toast.error("Couldn't access the clipboard");
+  }
 }
 
 interface SelectionAnchor {
@@ -115,7 +145,8 @@ function clampPosition(top: number, bottom: number, left: number) {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-const PostNotes = ({ postSlug, articleRef }: Props) => {
+const PostNotes = ({ postSlug, articleRef, isLoggedIn, onRequireLogin }: Props) => {
+  const [menu, setMenu] = useState<MenuState | null>(null);
   const [anchor, setAnchor] = useState<SelectionAnchor | null>(null);
   const [creatingNote, setCreatingNote] = useState(false); // anchor + input panel open
   const [noteText, setNoteText] = useState("");
@@ -123,22 +154,17 @@ const PostNotes = ({ postSlug, articleRef }: Props) => {
   const [editText, setEditText] = useState("");
   const [selectedColor, setSelectedColor] = useState<ColorKey>("yellow");
 
-  const actionMenuRef = useRef<HTMLDivElement>(null);
   const inputPanelRef = useRef<HTMLDivElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const editareaRef = useRef<HTMLTextAreaElement>(null);
-  const addBtnRef = useRef<HTMLButtonElement>(null);
 
-  // Mirror of creatingNote for use inside event handler closures
-  const creatingNoteRef = useRef(false);
-  useEffect(() => { creatingNoteRef.current = creatingNote; }, [creatingNote]);
 
   const createNote = useCreateNote(postSlug);
   const updateNote = useUpdateNote(postSlug);
   const deleteNote = useDeleteNote(postSlug);
   const { data: notesData } = useNotes(postSlug);
-  const notes = notesData?.notes ?? [];
+  const notes = useMemo(() => notesData?.notes ?? [], [notesData]);
 
   // ── Re-apply highlights whenever notes change ────────────────────────────
   useEffect(() => {
@@ -179,44 +205,63 @@ const PostNotes = ({ postSlug, articleRef }: Props) => {
     };
   }, [notes, articleRef]);
 
-  // ── Detect text selection ────────────────────────────────────────────────
+  // ── Close the highlight popover on outside press ────────────────────────
+  // Selecting text shows nothing (as in Obsidian's reading view); highlighting
+  // and notes are reached through the right-click menu.
   useEffect(() => {
-    const handleMouseUp = (e: MouseEvent) => {
-      if (addBtnRef.current?.contains(e.target as Node)) return;
-      if (actionMenuRef.current?.contains(e.target as Node)) return;
-      if (inputPanelRef.current?.contains(e.target as Node)) return;
-      if (popoverRef.current?.contains(e.target as Node)) return;
-      if (creatingNoteRef.current) return;
-
-      const sel = window.getSelection();
-      if (!sel || sel.isCollapsed) { setAnchor(null); return; }
-      const text = sel.toString().trim();
-      if (text.length < 3) { setAnchor(null); return; }
-
-      const article = articleRef.current;
-      if (!article) return;
-      const range = sel.getRangeAt(0);
-      if (!article.contains(range.commonAncestorContainer)) { setAnchor(null); return; }
-
-      const rect = range.getBoundingClientRect();
-      setAnchor({ text, top: rect.top, bottom: rect.bottom, left: rect.left });
-      setPopover(null);
-    };
-
     const handleMouseDown = (e: MouseEvent) => {
-      if (actionMenuRef.current?.contains(e.target as Node)) return;
       if (inputPanelRef.current?.contains(e.target as Node)) return;
       if (popoverRef.current?.contains(e.target as Node)) return;
-      if ((e.target as HTMLElement).closest("mark[data-note-id]")) return;
+      if ((e.target as HTMLElement).closest("mark[data-note-id], [data-article-menu]")) return;
       setPopover(null);
     };
-
-    document.addEventListener("mouseup", handleMouseUp);
     document.addEventListener("mousedown", handleMouseDown);
-    return () => {
-      document.removeEventListener("mouseup", handleMouseUp);
-      document.removeEventListener("mousedown", handleMouseDown);
+    return () => document.removeEventListener("mousedown", handleMouseDown);
+  }, []);
+
+  // ── Right-click menu (Obsidian-style) ───────────────────────────────────
+  useEffect(() => {
+    const article = articleRef.current;
+    if (!article) return;
+
+    const onContextMenu = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+
+      // 1) Right-click on an existing highlight
+      const mark = target.closest<HTMLElement>("mark[data-note-id]");
+      if (mark && article.contains(mark)) {
+        e.preventDefault();
+        setAnchor(null);
+        setPopover(null);
+        setMenu({
+          kind: "mark", x: e.clientX, y: e.clientY, noteId: mark.dataset.noteId!,
+          rect: mark.getBoundingClientRect(), headingId: nearestHeadingId(article, mark),
+        });
+        return;
+      }
+
+      // 2) Right-click on selected text inside the article
+      const sel = window.getSelection();
+      const text = sel?.toString().trim() ?? "";
+      if (sel && !sel.isCollapsed && text) {
+        const range = sel.getRangeAt(0);
+        if (article.contains(range.commonAncestorContainer)) {
+          e.preventDefault();
+          setAnchor(null);
+          setPopover(null);
+          setMenu({
+            kind: "selection", x: e.clientX, y: e.clientY, text,
+            rect: range.getBoundingClientRect(),
+            headingId: nearestHeadingId(article, range.startContainer),
+          });
+          return;
+        }
+      }
+      // 3) Otherwise keep the browser's native menu (links, images, etc.)
     };
+
+    article.addEventListener("contextmenu", onContextMenu);
+    return () => article.removeEventListener("contextmenu", onContextMenu);
   }, [articleRef]);
 
   // Focus textareas when their panels open
@@ -236,16 +281,6 @@ const PostNotes = ({ postSlug, articleRef }: Props) => {
     setCreatingNote(false);
     setNoteText("");
     window.getSelection()?.removeAllRanges();
-  };
-
-  // Create highlight only (no note)
-  const handleHighlightOnly = async () => {
-    if (!anchor) return;
-    try {
-      await createNote.mutateAsync({ selectedText: anchor.text, note: null, color: selectedColor });
-      toast.success("Highlighted");
-      dismissAnchor();
-    } catch { toast.error("Failed to save highlight"); }
   };
 
   // Create highlight + note
@@ -301,70 +336,102 @@ const PostNotes = ({ postSlug, articleRef }: Props) => {
 
   const anchorPos = anchor ? clampPosition(anchor.top, anchor.bottom, anchor.left) : null;
 
+  const sectionLink = (headingId: string | null) =>
+    `${window.location.origin}${window.location.pathname}${headingId ? `#${headingId}` : ""}`;
+
+  const menuEntries = (): MenuEntry[] => {
+    if (!menu) return [];
+    const linkEntry: MenuEntry = {
+      type: "item", label: menu.headingId ? "Copy link to section" : "Copy link to post", icon: Link2,
+      onSelect: () => copyText(sectionLink(menu.headingId), "Link copied"),
+    };
+
+    if (menu.kind === "selection") {
+      const { text, rect } = menu;
+      const clear = () => window.getSelection()?.removeAllRanges();
+      const highlightEntries: MenuEntry[] = isLoggedIn
+        ? [
+            {
+              type: "swatches", label: "Highlight", icon: Highlighter, colors: COLOR_PALETTE, current: selectedColor,
+              onPick: async (color) => {
+                setSelectedColor(color as ColorKey);
+                try {
+                  await createNote.mutateAsync({ selectedText: text, note: null, color });
+                  toast.success("Highlighted");
+                  clear();
+                } catch { toast.error("Failed to save highlight"); }
+              },
+            },
+            {
+              type: "item", label: "Highlight with note…", icon: MessageSquarePlus,
+              onSelect: () => {
+                setAnchor({ text, top: rect.top, bottom: rect.bottom, left: rect.left });
+                setCreatingNote(true);
+              },
+            },
+          ]
+        : [{ type: "item", label: "Sign in to highlight", icon: LogIn, onSelect: onRequireLogin }];
+
+      return [
+        ...highlightEntries,
+        { type: "separator" },
+        { type: "item", label: "Copy", icon: Copy, hint: "⌘C", onSelect: () => copyText(text) },
+        {
+          type: "item", label: "Copy as quote", icon: Quote,
+          onSelect: () => copyText(text.split("\n").map((l) => `> ${l}`).join("\n"), "Quote copied"),
+        },
+        linkEntry,
+      ];
+    }
+
+    // Existing highlight
+    const note = notes.find((n) => n.id === menu.noteId);
+    if (!note) return [linkEntry];
+    const { rect } = menu;
+    const openEditor = () => {
+      const { top, left } = clampPosition(rect.top, rect.bottom, rect.left);
+      setEditText(note.note ?? "");
+      setPopover({ noteId: note.id, selectedText: note.selectedText, note: note.note, top, left, mode: "edit" });
+    };
+
+    return [
+      { type: "label", label: `“${note.selectedText}”` },
+      { type: "item", label: note.note ? "Edit note" : "Add note", icon: note.note ? Pencil : MessageSquarePlus, onSelect: openEditor },
+      {
+        type: "swatches", label: "Colour", icon: Palette, colors: COLOR_PALETTE, current: note.color,
+        onPick: async (color) => {
+          if (color === note.color) return;
+          try { await updateNote.mutateAsync({ noteId: note.id, data: { color } }); }
+          catch { toast.error("Failed to change colour"); }
+        },
+      },
+      { type: "separator" },
+      { type: "item", label: "Copy text", icon: Copy, onSelect: () => copyText(note.selectedText) },
+      linkEntry,
+      { type: "separator" },
+      ...(note.note
+        ? [{
+            type: "item" as const, label: "Remove note", icon: MessageSquareX,
+            onSelect: async () => {
+              try { await updateNote.mutateAsync({ noteId: note.id, data: { note: null } }); toast.success("Note removed — highlight kept"); }
+              catch { toast.error("Failed to remove note"); }
+            },
+          }]
+        : []),
+      {
+        type: "item", label: "Remove highlight", icon: Trash2, danger: true,
+        onSelect: async () => {
+          try { await deleteNote.mutateAsync(note.id); toast.success("Highlight removed"); }
+          catch { toast.error("Failed to delete highlight"); }
+        },
+      },
+    ];
+  };
+
   return (
     <>
-      {/* ── Action menu: Highlight / Add Note ── */}
-      {anchor && !creatingNote && (
-        <div
-          ref={actionMenuRef}
-          style={{ position: "fixed", top: anchorPos!.top, left: anchorPos!.left, zIndex: 50 }}
-          className="flex flex-col gap-1.5 rounded-lg border border-border bg-card shadow-xl p-2"
-        >
-          {/* Colour picker row */}
-          <div className="flex items-center justify-between gap-1 px-0.5">
-            {COLOR_PALETTE.map((c) => (
-              <button
-                key={c.key}
-                title={c.label}
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={(e) => { e.stopPropagation(); setSelectedColor(c.key); }}
-                style={{ backgroundColor: c.swatch }}
-                className={`w-4 h-4 rounded-full border-2 transition-transform flex-shrink-0 ${
-                  selectedColor === c.key
-                    ? "border-foreground/60 scale-110"
-                    : "border-transparent hover:scale-110 hover:border-foreground/30"
-                }`}
-              />
-            ))}
-          </div>
-
-          {/* Action buttons row */}
-          <div className="flex items-center gap-1">
-            <button
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={handleHighlightOnly}
-              disabled={createNote.isPending}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium text-foreground hover:bg-muted transition-colors disabled:opacity-50"
-              title="Highlight without a note"
-            >
-              {createNote.isPending
-                ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                : <Highlighter className="w-3.5 h-3.5 text-amber-500" />}
-              Highlight
-            </button>
-
-            <div className="w-px h-4 bg-border/60" />
-
-            <button
-              ref={addBtnRef}
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => setCreatingNote(true)}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium text-foreground hover:bg-muted transition-colors"
-              title="Highlight and add a note"
-            >
-              <MessageSquarePlus className="w-3.5 h-3.5 text-primary" />
-              Add Note
-            </button>
-
-            <button
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={dismissAnchor}
-              className="p-1.5 rounded-md hover:bg-muted transition-colors"
-            >
-              <X className="w-3 h-3 text-muted-foreground" />
-            </button>
-          </div>
-        </div>
+      {menu && (
+        <ContextMenu x={menu.x} y={menu.y} entries={menuEntries()} onClose={() => setMenu(null)} />
       )}
 
       {/* ── Note input panel ── */}
