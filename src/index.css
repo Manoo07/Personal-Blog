@@ -205,6 +205,8 @@
     border-radius: 2px;
     padding: 0 2px;
   }
+  /* bold, links and code inside a highlight keep the highlight colour */
+  .prose mark:not(.note-highlight) :is(strong, em, a, code) { color: inherit; }
 
   .prose blockquote {
     margin: 0.75em 0;
