@@ -1,14 +1,14 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo, lazy, Suspense } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import Layout from "@/components/Layout";
 import Breadcrumb from "@/components/Breadcrumb";
 import TagInput from "@/components/TagInput";
 import SectionTreeDropdown from "@/components/SectionTreeDropdown";
-import { Pencil, Trash2, Plus, Save, Eye, Code, LogOut, Loader2, Globe, FileText, FolderTree, ImagePlus, Settings2, ChevronUp, ChevronDown } from "lucide-react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import remarkObsidian from "@/lib/remark-obsidian";
-import rehypeHighlight from "rehype-highlight";
+import { Pencil, Trash2, Plus, Save, LogOut, Loader2, Globe, FileText, FolderTree, Settings2, ChevronUp, ChevronDown } from "lucide-react";
+import type { ObsidianEditorHandle, EditorNote } from "@/components/editor/ObsidianEditor";
+
+// The editor (CodeMirror) only loads for the admin, never for blog readers
+const ObsidianEditor = lazy(() => import("@/components/editor/ObsidianEditor"));
 import {
   useLogin,
   useVerifyToken,
@@ -31,7 +31,7 @@ import {
   altFromFilename,
   ImagePrepError,
 } from "@/lib/image-upload";
-import type { ApiPost, CreatePostRequest, UpdatePostRequest } from "@/lib/api";
+import type { ApiPost, ApiSectionNode, CreatePostRequest, UpdatePostRequest } from "@/lib/api";
 
 type View = "list" | "edit";
 
@@ -53,14 +53,12 @@ const Admin = () => {
   const navigate = useNavigate();
   const [editingPost, setEditingPost] = useState<EditablePost | null>(null);
   const [isCreating, setIsCreating] = useState(false);
-  const [showPreview, setShowPreview] = useState(false);
   const [view, setView] = useState<View>("list");
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadingCount, setUploadingCount] = useState(0);
-  const [isDraggingImage, setIsDraggingImage] = useState(false);
   const [adminPage, setAdminPage] = useState(0);
   const POSTS_PER_PAGE = 15;
-  const contentTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const editorRef = useRef<ObsidianEditorHandle | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   
   // Auth state
@@ -87,6 +85,19 @@ const Admin = () => {
   const reorderMutation = useReorderPosts();
   const { data: sectionData, isLoading: isLoadingSections } = useSectionTree();
   const sections = sectionData?.sections ?? [];
+
+  // Every published post (the section tree holds them all), for [[ link autocomplete in the editor
+  const linkableNotes = useMemo(() => {
+    const out: EditorNote[] = [];
+    const walk = (nodes: ApiSectionNode[]) => {
+      for (const n of nodes) {
+        for (const p of n.posts ?? []) out.push({ title: p.title, slug: p.slug, section: n.name });
+        walk(n.children ?? []);
+      }
+    };
+    walk(sectionData?.sections ?? []);
+    return out;
+  }, [sectionData]);
 
   // Check if user is authenticated
   const hasToken = !!getToken();
@@ -201,7 +212,6 @@ const Admin = () => {
 
   const handleEdit = async (post: ApiPost | typeof posts[number]) => {
     setIsCreating(false);
-    setShowPreview(false);
     setView("edit");
     // Populate with what we have immediately so the form opens
     setEditingPost({
@@ -239,7 +249,6 @@ const Admin = () => {
   const handleCreate = () => {
     setEditingPost({ ...emptyPost, order: 0 });
     setIsCreating(true);
-    setShowPreview(false);
     setView("edit");
   };
 
@@ -276,8 +285,7 @@ const Admin = () => {
       }
       setEditingPost(null);
       setIsCreating(false);
-      setShowPreview(false);
-      setView("list");
+        setView("list");
     } catch (error) {
       // Error handled by mutation
     }
@@ -309,7 +317,6 @@ const Admin = () => {
   const handleBack = () => {
     setEditingPost(null);
     setIsCreating(false);
-    setShowPreview(false);
     setUploadError(null);
     setView("list");
   };
@@ -320,27 +327,15 @@ const Admin = () => {
     }
   };
 
-  /** Insert text at the textarea caret using a functional update (safe across awaits). */
+  /** Insert text at the editor cursor. */
   const insertIntoContentAtCursor = (textToInsert: string) => {
-    const textarea = contentTextareaRef.current;
-    let caret = 0;
-    setEditingPost((prev) => {
-      if (!prev) return prev;
-      const value = prev.content;
-      const start = textarea ? textarea.selectionStart ?? value.length : value.length;
-      const end = textarea ? textarea.selectionEnd ?? value.length : value.length;
-      caret = start + textToInsert.length;
-      return { ...prev, content: `${value.slice(0, start)}${textToInsert}${value.slice(end)}` };
-    });
-    requestAnimationFrame(() => {
-      if (!textarea) return;
-      textarea.focus();
-      textarea.setSelectionRange(caret, caret);
-    });
+    if (editorRef.current) editorRef.current.insert(textToInsert);
+    else setEditingPost((prev) => (prev ? { ...prev, content: prev.content + textToInsert } : prev));
   };
 
   /** Swap a placeholder for its final text (or remove it) wherever it now is. */
   const replaceInContent = (placeholder: string, replacement: string) => {
+    if (editorRef.current?.replace(placeholder, replacement)) return;
     setEditingPost((prev) =>
       prev ? { ...prev, content: prev.content.replace(placeholder, replacement) } : prev
     );
@@ -401,42 +396,6 @@ const Admin = () => {
     if (files.length) await uploadImages(files);
   };
 
-  const handleContentPaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
-    const files = Array.from(e.clipboardData.files).filter((f) => f.type.startsWith("image/"));
-    if (files.length === 0) return; // normal text paste
-    e.preventDefault();
-    uploadImages(files);
-  };
-
-  const handleContentDrop = (e: React.DragEvent<HTMLTextAreaElement>) => {
-    setIsDraggingImage(false);
-    const files = Array.from(e.dataTransfer.files);
-    if (files.length === 0) return;
-    e.preventDefault();
-    // Put the caret where the files were dropped (best effort: end if unknown)
-    contentTextareaRef.current?.focus();
-    uploadImages(files);
-  };
-
-  const contentTextareaProps = {
-    ref: contentTextareaRef,
-    value: editingPost?.content ?? "",
-    onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => updateField("content", e.target.value),
-    onPaste: handleContentPaste,
-    onDrop: handleContentDrop,
-    onDragOver: (e: React.DragEvent) => {
-      if (Array.from(e.dataTransfer.types).includes("Files")) {
-        e.preventDefault();
-        setIsDraggingImage(true);
-      }
-    },
-    onDragLeave: () => setIsDraggingImage(false),
-    className: `w-full h-[320px] sm:h-[400px] px-3 py-2 rounded-md bg-background border text-foreground font-mono text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-primary transition-shadow resize-none ${
-      isDraggingImage ? "border-primary border-dashed ring-2 ring-primary/30" : "border-border"
-    }`,
-    placeholder: "# Heading\n\nWrite your post in **Markdown**…\n\nPaste or drop images right here.",
-  };
-
   const getSectionKey = (post: { sectionId?: string | null; section?: { id: string } | null }) =>
     post.sectionId ?? post.section?.id ?? null;
 
@@ -483,14 +442,6 @@ const Admin = () => {
               {isCreating ? "New Post" : "Edit Post"}
             </h1>
             <div className="flex gap-1.5 w-full sm:w-auto justify-end">
-              <button
-                type="button"
-                onClick={() => setShowPreview(!showPreview)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-secondary text-secondary-foreground text-sm hover:opacity-80 transition-opacity"
-              >
-                {showPreview ? <Code className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                <span className="hidden xs:inline">{showPreview ? "Editor" : "Preview"}</span>
-              </button>
               <button
                 onClick={handleSave}
                 disabled={isSaving}
@@ -568,58 +519,37 @@ const Admin = () => {
               />
             </div>
 
-            {/* Content + Live Preview */}
+            {/* Content: Obsidian-style editor */}
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">
-                Content (Markdown)
-              </label>
-              <div className="mb-2 flex items-center gap-2">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept={ALLOWED_IMAGE_TYPES.join(",")}
-                  multiple
-                  className="hidden"
-                  onChange={handleImageUpload}
+              <label className="block text-sm font-medium text-foreground mb-1">Content</label>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept={ALLOWED_IMAGE_TYPES.join(",")}
+                multiple
+                className="hidden"
+                onChange={handleImageUpload}
+              />
+              {uploadError && <p className="mb-2 text-xs text-destructive">{uploadError}</p>}
+              <Suspense
+                fallback={
+                  <div className="h-[72vh] min-h-[460px] rounded-lg border border-border flex items-center justify-center">
+                    <Loader2 className="w-5 h-5 animate-spin text-primary" />
+                  </div>
+                }
+              >
+                <ObsidianEditor
+                  key={editingPost.id ?? "new"}
+                  ref={editorRef}
+                  value={editingPost.content}
+                  onChange={(content) => setEditingPost((prev) => (prev ? { ...prev, content } : prev))}
+                  notes={linkableNotes.filter((n) => n.slug !== editingPost.slug)}
+                  onImageFiles={uploadImages}
+                  onPickImage={handleImagePick}
+                  uploading={uploadingCount}
+                  placeholder={"Start writing…  Type [[ to link another post, paste or drop images, ⌘E for reading view."}
                 />
-                <button
-                  type="button"
-                  onClick={handleImagePick}
-                  disabled={uploadingCount > 0}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-border/60 text-xs text-foreground hover:bg-secondary transition-colors disabled:opacity-50"
-                >
-                  {uploadingCount > 0 ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  ) : (
-                    <ImagePlus className="w-3.5 h-3.5" />
-                  )}
-                  {uploadingCount > 0 ? `Uploading ${uploadingCount}…` : "Add images"}
-                </button>
-                <span className="text-xs text-muted-foreground">
-                  or paste / drag images into the editor · PNG, JPEG, GIF, WebP, AVIF · large images are compressed to fit 2 MB
-                </span>
-              </div>
-              {uploadError && (
-                <p className="mb-2 text-xs text-destructive">{uploadError}</p>
-              )}
-              {showPreview ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div>
-                    <textarea {...contentTextareaProps} />
-                  </div>
-                  <div>
-                    <div className="h-[320px] sm:h-[400px] px-4 py-3 rounded-md bg-background border border-border overflow-auto">
-                      <article className="prose max-w-none">
-                        <ReactMarkdown remarkPlugins={[remarkGfm, remarkObsidian]} rehypePlugins={[rehypeHighlight]}>
-                          {editingPost.content || "*Start writing to see preview...*"}
-                        </ReactMarkdown>
-                      </article>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <textarea {...contentTextareaProps} />
-              )}
+              </Suspense>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-4 gap-3">

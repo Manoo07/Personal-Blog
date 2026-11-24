@@ -1,6 +1,6 @@
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { useMemo, useRef, useState } from "react";
-import ReactMarkdown, { Components } from "react-markdown";
+import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkObsidian from "@/lib/remark-obsidian";
 import rehypeHighlight from "rehype-highlight";
@@ -9,7 +9,7 @@ import BlogSidebar from "@/components/BlogSidebar";
 import SectionNav from "@/components/SectionNav";
 import { sortSections } from "@/lib/sections";
 import PostNotes from "@/components/PostNotes";
-import MermaidDiagram from "@/components/MermaidDiagram";
+import { markdownComponents } from "@/lib/markdown-components";
 import { usePost, useAdjacentPosts, useMarkComplete, useUnmarkComplete, useUserProgress, useSectionTree } from "@/hooks/use-api";
 import type { ApiSectionNode } from "@/lib/api";
 import { useUserAuth } from "@/contexts/UserAuthContext";
@@ -18,57 +18,6 @@ import { usePersistentState } from "@/hooks/use-persistent-state";
 import { cn } from "@/lib/utils";
 import { useSiteConfig } from "@/hooks/use-site-config";
 import { format } from "date-fns";
-
-/** Custom renderers for ReactMarkdown */
-const markdownComponents: Components = {
-  pre({ children, ...props }) {
-    // Extract language from the child <code> element's className
-    let language = "";
-    let codeContent = "";
-    if (
-      children &&
-      typeof children === "object" &&
-      "props" in (children as any)
-    ) {
-      const codeProps = (children as any).props;
-      const className = codeProps?.className || "";
-      const match = className.match(/language-(\w+)/);
-      if (match) language = match[1];
-      if (typeof codeProps?.children === "string") {
-        codeContent = codeProps.children;
-      }
-    }
-
-    if (language === "mermaid") {
-      return <MermaidDiagram code={codeContent} />;
-    }
-
-    return (
-      <div className="code-block-wrapper">
-        {language && (
-          <div className="code-block-lang">
-            {language}
-          </div>
-        )}
-        <pre {...props}>{children}</pre>
-      </div>
-    );
-  },
-
-  img({ node: _node, ...props }) {
-    return <img {...props} loading="lazy" decoding="async" />;
-  },
-
-  // Wrap every table in a horizontally-scrollable container so it
-  // never overflows on small screens.
-  table({ children, ...props }) {
-    return (
-      <div className="table-responsive-wrapper">
-        <table {...props}>{children}</table>
-      </div>
-    );
-  },
-};
 
 /** Path of sections from the root down to `id` (inclusive), or [] if not found. */
 function findSectionPath(nodes: ApiSectionNode[], id: string): ApiSectionNode[] {
