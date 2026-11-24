@@ -81,16 +81,15 @@ export const DEFAULT_SITE_CONFIG: SiteConfig = {
   profile: {
     name: "Manohar Boinapally",
     pronouns: "He/Him",
-    headline:
-      "Full-Stack Developer | Associate Software Engineer @ OSI Digital | AWS Certified | BE OU'24",
-    title: "Software Engineer",
-    location: "Khammam, Telangana, India",
+    headline: "Senior Software Engineer @ SS&C Technologies | Full-Stack Developer | AWS Certified | BE OU'24",
+    title: "Senior Software Engineer",
+    location: "Hyderabad, Telangana, India",
     avatarUrl: "",
   },
   home: {
     greeting: "Hi, I'm",
     intro:
-      "I'm passionate about technology and continuous learning. I enjoy understanding how things work behind the scenes and turning ideas into practical solutions. My focus is on building strong fundamentals and applying them to real-world problems.\n\nThrough this blog, I share what I learn, the challenges I face, and the solutions I discover along the way. My goal is to simplify technical concepts and make them easy to understand for everyone.",
+      "I'm a Senior Software Engineer at **SS&C Technologies** in Hyderabad. Before that I spent two and a half years at OSI Digital, growing from intern to Software Engineer and building full-stack products with Python, Django, React and Docker.\n\nThis blog is where I work through the fundamentals underneath everyday backend work: system design, operating systems, databases and distributed systems. Every series starts from first principles, so you can begin with no background and follow along.",
     primaryCta: "Read the blog",
     secondaryCta: "About me",
     recentPostsTitle: "Recent Writing",
@@ -98,13 +97,29 @@ export const DEFAULT_SITE_CONFIG: SiteConfig = {
   },
   about: {
     bio:
-      "I'm a passionate full-stack developer with 1.9+ years of experience building scalable web applications and cloud-based solutions. I specialize in creating efficient backend systems, responsive frontend interfaces, and containerized deployments.\n\nCurrently working at **OSI Digital** as an Associate Software Engineer, where I focus on building robust applications using React, Node.js, and cloud technologies. I'm AWS certified and deeply interested in distributed systems, API design, and modern DevOps practices.\n\nI believe great software comes from understanding both the business needs and technical excellence. When I'm not coding, I'm learning new technologies and sharing knowledge through technical writing.",
+      "I'm a software engineer who builds web applications end to end: the APIs and databases, the React front end, and the containers they ship in. In November 2026 I joined **SS&C Technologies** as a Senior Software Engineer.\n\nBefore that I spent two and a half years at **OSI Digital**, starting as an intern and growing through Project Associate Trainee and Associate Software Engineer to Software Engineer, working mostly with Python, Django, React and Docker. I'm AWS certified.\n\nOutside work I write long-form notes on system design, operating systems, databases and distributed systems. I care about understanding why things work, not just how to use them, and the blog is where those notes live.",
     experience: [
+      {
+        role: "Senior Software Engineer",
+        company: "SS&C Technologies",
+        period: "Nov 2026 — Present",
+        type: "Full-time · Hybrid · Hyderabad",
+        description: "",
+        skills: [],
+      },
+      {
+        role: "Software Engineer",
+        company: "OSI Digital",
+        period: "Apr 2026 — Nov 2026",
+        type: "Full-time · 8 mos · Hyderabad",
+        description: "",
+        skills: ["Python", "Django"],
+      },
       {
         role: "Associate Software Engineer",
         company: "OSI Digital",
-        period: "Jan 2025 — Present",
-        type: "Full-time · 1 yr 2 mos",
+        period: "Jan 2025 — Mar 2026",
+        type: "Full-time · 1 yr 3 mos",
         description:
           "Building production-grade applications and managing deployment infrastructure. Working with React, Docker, and cloud technologies to deliver scalable solutions.",
         skills: ["Docker", "React.js", "TypeScript", "AWS"],
@@ -122,7 +137,7 @@ export const DEFAULT_SITE_CONFIG: SiteConfig = {
         role: "Intern",
         company: "OSI Digital",
         period: "Jan 2024 — Apr 2024",
-        type: "Internship · 4 mos",
+        type: "Internship · 4 mos · Hyderabad",
         description:
           "Learned core software engineering principles. Built REST APIs with FastAPI, practiced OOP concepts, and worked on algorithmic challenges.",
         skills: ["FastAPI", "Python", "OOP", "SQL", "Git"],
@@ -145,7 +160,7 @@ export const DEFAULT_SITE_CONFIG: SiteConfig = {
     skillGroups: [
       { title: "Languages", emphasis: true, items: ["TypeScript", "JavaScript", "Python", "C++", "C", "SQL"] },
       { title: "Frontend", emphasis: false, items: ["React.js", "Tailwind CSS", "HTML", "CSS", "JavaScript"] },
-      { title: "Backend & APIs", emphasis: false, items: ["Node.js", "FastAPI", "REST APIs", "LangChain"] },
+      { title: "Backend & APIs", emphasis: false, items: ["Django", "Node.js", "FastAPI", "REST APIs", "LangChain"] },
       {
         title: "Databases & Tools",
         emphasis: false,
