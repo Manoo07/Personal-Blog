@@ -82,7 +82,7 @@ const GitHubProjectCard = ({ project, index = 0 }: GitHubProjectCardProps) => {
 
       <div className="flex items-center gap-1.5">
         {project.tags.map((tag) => (
-          <span key={tag} className="text-[11px] font-mono px-1.5 py-0.5 rounded bg-secondary text-secondary-foreground">
+          <span key={tag} className="text-[11px] font-mono px-1.5 py-0.5 rounded whitespace-nowrap bg-secondary text-secondary-foreground">
             {tag}
           </span>
         ))}

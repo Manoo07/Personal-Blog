@@ -329,67 +329,79 @@ const BlogPost = () => {
               </ReactMarkdown>
             </div>
 
-            {/* Mark as complete */}
-            <div className="mt-8 pt-5 border-t border-secondary-alt/70">
-              {isLoggedIn ? (
+            {/* Article footer: progress + series navigation */}
+            <footer className="mt-12 pt-6 border-t border-secondary-alt/70 space-y-4" aria-label="Article navigation">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-[14px] text-muted-foreground">
+                  {isLoggedIn
+                    ? isCompleted
+                      ? `You finished this on ${format(new Date(completedItem!.completedAt), "MMM d, yyyy")}.`
+                      : "Finished reading?"
+                    : "Sign in to keep track of what you've read."}
+                </p>
                 <button
                   type="button"
                   onClick={() =>
-                    isCompleted ? unmarkComplete.mutate(slug || "") : markComplete.mutate(slug || "")
+                    !isLoggedIn
+                      ? openAuthModal("login")
+                      : isCompleted
+                        ? unmarkComplete.mutate(slug || "")
+                        : markComplete.mutate(slug || "")
                   }
                   disabled={markComplete.isPending || unmarkComplete.isPending}
-                  className={
-                    isCompleted
-                      ? "inline-flex items-center gap-2 h-[32px] px-3.5 rounded-[5px] text-[14px] bg-tag text-primary hover:brightness-95 transition"
-                      : "inline-flex items-center gap-2 h-[32px] px-3.5 rounded-[5px] text-[14px] bg-[hsl(0_0%_96%)] text-foreground border border-border shadow-[0_1px_1px_rgba(0,0,0,0.06)] hover:bg-white transition"
-                  }
+                  className={cn(
+                    "inline-flex items-center gap-2 h-9 px-4 rounded-md text-[14px] font-medium transition-colors disabled:opacity-60",
+                    isLoggedIn && isCompleted
+                      ? "bg-tag text-primary hover:bg-tag/70"
+                      : "border border-border bg-card text-foreground hover:border-primary/50 hover:text-primary"
+                  )}
+                  title={isLoggedIn && isCompleted ? "Mark as not read" : undefined}
                 >
                   {markComplete.isPending || unmarkComplete.isPending ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : isCompleted ? (
+                  ) : isLoggedIn && isCompleted ? (
                     <CheckCircle2 className="w-4 h-4" />
                   ) : (
-                    <Circle className="w-4 h-4 text-muted-foreground" />
+                    <Circle className="w-4 h-4" />
                   )}
-                  {isCompleted
-                    ? `Completed · ${format(new Date(completedItem!.completedAt), "MMM d, yyyy")}`
-                    : "Mark as complete"}
+                  {!isLoggedIn ? "Sign in" : isCompleted ? "Completed" : "Mark as complete"}
                 </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => openAuthModal("login")}
-                  className="inline-flex items-center gap-2 h-[32px] px-3.5 rounded-[5px] text-[14px] bg-[hsl(0_0%_96%)] text-muted-foreground border border-border hover:text-foreground transition"
-                >
-                  <Circle className="w-4 h-4" />
-                  Sign in to track progress
-                </button>
-              )}
-            </div>
+              </div>
 
-            {/* Prev / next — plain links, like an Obsidian series nav */}
-            {(prev || next) && (
-              <nav className="mt-5 flex items-start justify-between gap-6 text-[15px]">
-                {prev ? (
-                  <Link to={`/blog/${prev.slug}`} className="group min-w-0 max-w-[48%]">
-                    <span className="block text-[12px] text-muted-foreground mb-0.5">Previous</span>
-                    <span className="text-link underline underline-offset-[3px] decoration-1 group-hover:opacity-80">
-                      ← {prev.title}
-                    </span>
-                  </Link>
-                ) : (
-                  <span />
-                )}
-                {next && (
-                  <Link to={`/blog/${next.slug}`} className="group min-w-0 max-w-[48%] text-right">
-                    <span className="block text-[12px] text-muted-foreground mb-0.5">Next</span>
-                    <span className="text-link underline underline-offset-[3px] decoration-1 group-hover:opacity-80">
-                      {next.title} →
-                    </span>
-                  </Link>
-                )}
-              </nav>
-            )}
+              {(prev || next) && (
+                <nav className="grid gap-3 sm:grid-cols-2">
+                  {prev && (
+                    <Link
+                      to={`/blog/${prev.slug}`}
+                      className="group flex flex-col gap-1 rounded-lg border border-border bg-card/60 px-4 py-3 hover:border-primary/50 hover:bg-card transition-colors"
+                    >
+                      <span className="flex items-center gap-1 text-[12px] uppercase tracking-wide text-muted-foreground">
+                        <ArrowLeft className="w-3.5 h-3.5" /> Previous
+                      </span>
+                      <span className="text-[15px] font-medium leading-snug text-foreground group-hover:text-primary line-clamp-2">
+                        {prev.title}
+                      </span>
+                    </Link>
+                  )}
+                  {next && (
+                    <Link
+                      to={`/blog/${next.slug}`}
+                      className={cn(
+                        "group flex flex-col items-end gap-1 text-right rounded-lg border border-border bg-card/60 px-4 py-3 hover:border-primary/50 hover:bg-card transition-colors",
+                        !prev && "sm:col-start-2"
+                      )}
+                    >
+                      <span className="flex items-center gap-1 text-[12px] uppercase tracking-wide text-muted-foreground">
+                        Next <ArrowRight className="w-3.5 h-3.5" />
+                      </span>
+                      <span className="text-[15px] font-medium leading-snug text-foreground group-hover:text-primary line-clamp-2">
+                        {next.title}
+                      </span>
+                    </Link>
+                  )}
+                </nav>
+              )}
+            </footer>
           </article>
         </div>
       </div>
@@ -406,7 +418,7 @@ const BlogPost = () => {
       />
 
       {/* Status bar */}
-      <div className="hidden sm:flex fixed bottom-0 right-0 z-40 items-center gap-4 h-[28px] px-3 bg-secondary border-t border-l border-border rounded-tl-[8px] text-[12px] text-muted-foreground tabular-nums">
+      <div className="hidden xl:flex fixed bottom-0 right-0 z-40 items-center gap-4 h-[28px] px-3 bg-secondary border-t border-l border-border rounded-tl-[8px] text-[12px] text-muted-foreground tabular-nums">
         <span>{post.readingTime} min read</span>
         <span>{stats.words.toLocaleString()} words</span>
         <span>{stats.chars.toLocaleString()} characters</span>
