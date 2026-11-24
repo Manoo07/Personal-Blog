@@ -111,6 +111,50 @@ function splitHighlights(children: MdNode[]): MdNode[] {
     }
     if (last < value.length) out.push({ type: "text", value: value.slice(last) });
   }
+  return wrapSpanningHighlights(out);
+}
+
+const mark = (children: MdNode[]): MdNode => ({ type: "emphasis", children, data: { hName: "mark" } });
+
+/**
+ * ==text **with bold** or [links]== : the markers sit in two different text
+ * nodes with other inline nodes between them, so the per-node regex above
+ * misses it. Pair a leftover opening "==" with the next closing "==" among
+ * the siblings and wrap everything in between.
+ */
+function wrapSpanningHighlights(nodes: MdNode[]): MdNode[] {
+  const out = [...nodes];
+  for (let i = 0; i < out.length; i++) {
+    const open = out[i];
+    if (open.type !== "text" || !open.value) continue;
+    const o = open.value.lastIndexOf("==");
+    if (o < 0) continue;
+    // "==" must be followed by content: a non-space here, or the next inline node
+    const next = open.value[o + 2];
+    if (next !== undefined && /\s/.test(next)) continue;
+    for (let j = i + 1; j < out.length; j++) {
+      const close = out[j];
+      if (close.type !== "text" || !close.value?.includes("==")) continue;
+      const c = close.value.indexOf("==");
+      if (c === 0 ? false : /\s/.test(close.value[c - 1])) break;
+      const before = open.value.slice(0, o);
+      const firstPart = open.value.slice(o + 2);
+      const lastPart = close.value.slice(0, c);
+      const after = close.value.slice(c + 2);
+      const inner: MdNode[] = [
+        ...(firstPart ? [{ type: "text", value: firstPart }] : []),
+        ...out.slice(i + 1, j),
+        ...(lastPart ? [{ type: "text", value: lastPart }] : []),
+      ];
+      const replacement: MdNode[] = [
+        ...(before ? [{ type: "text", value: before }] : []),
+        mark(inner),
+        ...(after ? [{ type: "text", value: after }] : []),
+      ];
+      out.splice(i, j - i + 1, ...replacement);
+      break;
+    }
+  }
   return out;
 }
 

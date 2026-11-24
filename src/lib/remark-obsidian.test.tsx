@@ -54,4 +54,18 @@ describe("remarkObsidian highlights", () => {
     expect(render("`==x==` and a == b == c")).toBe("<p><code>==x==</code> and a == b == c</p>");
     expect(render("```js\nif (a == b) {} // ==no==\n```")).not.toContain("<mark>");
   });
+
+  it("highlights across bold, links and other inline formatting", () => {
+    expect(render("If too many ==read requests, **replication** can help==. Next.")).toBe(
+      "<p>If too many <mark>read requests, <strong>replication</strong> can help</mark>. Next.</p>"
+    );
+    expect(render("==**all bold**== end")).toBe("<p><mark><strong>all bold</strong></mark> end</p>");
+    expect(render("see ==the [docs](https://x.dev) here== now")).toBe(
+      '<p>see <mark>the <a href="https://x.dev">docs</a> here</mark> now</p>'
+    );
+  });
+
+  it("does not pair spaced equality operators across formatting", () => {
+    expect(render("a == **b** == c")).toBe("<p>a == <strong>b</strong> == c</p>");
+  });
 });
