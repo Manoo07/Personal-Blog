@@ -35,7 +35,7 @@ function collectIds(node: ApiSectionNode): string[] {
 }
 
 const ROW =
-  "relative flex items-center w-full min-w-0 h-[25px] pl-[24px] pr-2 rounded-[4px] text-[13px] leading-none text-left transition-colors duration-100";
+  "relative flex items-center w-full min-w-0 h-[26px] pl-[24px] pr-2 rounded-[4px] text-[13px] leading-[18px] text-left transition-colors duration-100";
 
 // ── Recursive folder ────────────────────────────────────────────────────
 
