@@ -9,6 +9,7 @@ import BlogSidebar from "@/components/BlogSidebar";
 import SectionNav from "@/components/SectionNav";
 import { sortSections } from "@/lib/sections";
 import PostNotes from "@/components/PostNotes";
+import ImageViewer, { type ViewerImage } from "@/components/ImageViewer";
 import { markdownComponents } from "@/lib/markdown-components";
 import { usePost, useAdjacentPosts, useMarkComplete, useUnmarkComplete, useUserProgress, useSectionTree } from "@/hooks/use-api";
 import type { ApiSectionNode } from "@/lib/api";
@@ -60,6 +61,19 @@ const BlogPost = () => {
   const markComplete = useMarkComplete();
   const unmarkComplete = useUnmarkComplete();
   const articleRef = useRef<HTMLElement>(null);
+
+  // Click an image in the article: open it in the full-screen viewer (with every image of the post to browse)
+  const [viewer, setViewer] = useState<{ images: ViewerImage[]; index: number } | null>(null);
+  const openImageViewer = (e: React.MouseEvent<HTMLDivElement>) => {
+    const target = e.target as HTMLElement;
+    if (!(target instanceof HTMLImageElement)) return;
+    if (window.getSelection()?.toString()) return; // finishing a text selection, not a click
+    const imgs = Array.from(e.currentTarget.querySelectorAll("img"));
+    const index = imgs.indexOf(target);
+    if (index < 0) return;
+    e.preventDefault(); // images wrapped in a link open in the viewer instead
+    setViewer({ images: imgs.map((im) => ({ src: im.currentSrc || im.src, alt: im.alt })), index });
+  };
   const libraryName = useSiteConfig().site.libraryName;
 
   // Obsidian-style side panes: desktop collapse state persists; below the
@@ -268,7 +282,7 @@ const BlogPost = () => {
             </section>
 
             {/* Body */}
-            <div className="prose">
+            <div className="prose" onClick={openImageViewer}>
               <ReactMarkdown
                 remarkPlugins={[remarkGfm, remarkObsidian]}
                 rehypePlugins={[rehypeHighlight]}
@@ -372,6 +386,15 @@ const BlogPost = () => {
         <span>{stats.words.toLocaleString()} words</span>
         <span>{stats.chars.toLocaleString()} characters</span>
       </div>
+
+      {viewer && (
+        <ImageViewer
+          images={viewer.images}
+          index={viewer.index}
+          onIndexChange={(index) => setViewer((v) => (v ? { ...v, index } : v))}
+          onClose={() => setViewer(null)}
+        />
+      )}
 
       {/* Highlights & notes: selection bubble + Obsidian-style right-click menu */}
       {slug && (

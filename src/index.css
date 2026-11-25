@@ -205,6 +205,8 @@
     border-radius: 2px;
     padding: 0 2px;
   }
+  /* article images open in the image viewer */
+  .prose img { cursor: zoom-in; }
   /* bold, links and code inside a highlight keep the highlight colour */
   .prose mark:not(.note-highlight) :is(strong, em, a, code) { color: inherit; }
 
