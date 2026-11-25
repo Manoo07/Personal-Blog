@@ -75,6 +75,13 @@ class ImageWidget extends WidgetType {
       wrap.textContent = this.alt || "Uploading…";
       return wrap;
     }
+    if (/\.pdf(?:$|[?#])/i.test(this.src)) {
+      // PDFs render as a reader on the post; in the editor a compact chip keeps writing fast
+      wrap.classList.add("cm-lp-pdf");
+      wrap.textContent = this.alt || "PDF";
+      wrap.title = "PDF — shown as an embedded reader on the post (⌘E to preview)";
+      return wrap;
+    }
     const img = document.createElement("img");
     img.src = this.src;
     img.alt = this.alt;

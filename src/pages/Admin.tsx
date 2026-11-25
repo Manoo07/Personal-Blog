@@ -25,10 +25,11 @@ import {
 } from "@/hooks/use-api";
 import { isAuthenticated, getToken, api } from "@/lib/api";
 import {
-  ALLOWED_IMAGE_TYPES,
   prepareImageForUpload,
   withSensibleName,
   altFromFilename,
+  ALLOWED_UPLOAD_TYPES,
+  isUploadableFile,
   ImagePrepError,
 } from "@/lib/image-upload";
 import type { ApiPost, ApiSectionNode, CreatePostRequest, UpdatePostRequest } from "@/lib/api";
@@ -346,9 +347,9 @@ const Admin = () => {
    * A visible placeholder is inserted immediately so you can keep writing.
    */
   const uploadImages = async (files: File[]) => {
-    const images = files.filter((f) => f.type.startsWith("image/"));
+    const images = files.filter(isUploadableFile);
     if (images.length === 0) {
-      setUploadError("Only image files can be added here.");
+      setUploadError("Only images and PDFs can be added here.");
       return;
     }
     setUploadError(null);
@@ -525,7 +526,7 @@ const Admin = () => {
               <input
                 ref={fileInputRef}
                 type="file"
-                accept={ALLOWED_IMAGE_TYPES.join(",")}
+                accept={ALLOWED_UPLOAD_TYPES.join(",")}
                 multiple
                 className="hidden"
                 onChange={handleImageUpload}

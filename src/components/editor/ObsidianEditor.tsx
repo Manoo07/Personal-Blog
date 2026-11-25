@@ -35,6 +35,7 @@ import {
 import remarkObsidian from "@/lib/remark-obsidian";
 import { markdownComponents } from "@/lib/markdown-components";
 import { cn } from "@/lib/utils";
+import { isUploadableFile } from "@/lib/image-upload";
 import { CALLOUT_TYPES, HighlightSyntax, highlightTag, livePreview } from "./live-preview";
 import {
   insertCallout, insertCodeBlock, insertDivider, insertLink, insertTable, obsidianKeymap, setHeading,
@@ -206,7 +207,7 @@ const ObsidianEditor = forwardRef<ObsidianEditorHandle, Props>(function Obsidian
         }),
         EditorView.domEventHandlers({
           paste(e, view) {
-            const files = Array.from(e.clipboardData?.files ?? []).filter((f) => f.type.startsWith("image/"));
+            const files = Array.from(e.clipboardData?.files ?? []).filter(isUploadableFile);
             if (files.length && onImageFilesRef.current) {
               e.preventDefault();
               onImageFilesRef.current(files);
@@ -236,7 +237,7 @@ const ObsidianEditor = forwardRef<ObsidianEditorHandle, Props>(function Obsidian
           },
           drop(e, view) {
             setDragging(false);
-            const files = Array.from(e.dataTransfer?.files ?? []).filter((f) => f.type.startsWith("image/"));
+            const files = Array.from(e.dataTransfer?.files ?? []).filter(isUploadableFile);
             if (!files.length || !onImageFilesRef.current) return false;
             e.preventDefault();
             const pos = view.posAtCoords({ x: e.clientX, y: e.clientY });
@@ -388,10 +389,10 @@ const ObsidianEditor = forwardRef<ObsidianEditorHandle, Props>(function Obsidian
             onClick={onPickImage}
             disabled={uploading > 0}
             className="obs-tool w-auto px-2 gap-1.5"
-            title="Add images (or paste / drop them into the editor)"
+            title="Add images or PDFs (or paste / drop them into the editor)"
           >
             {uploading > 0 ? <Loader2 className="w-4 h-4 animate-spin" /> : <ImagePlus className="w-4 h-4" strokeWidth={1.9} />}
-            <span className="text-[12px]">{uploading > 0 ? `Uploading ${uploading}…` : "Image"}</span>
+            <span className="text-[12px]">{uploading > 0 ? `Uploading ${uploading}…` : "Image / PDF"}</span>
           </button>
         )}
 
@@ -471,7 +472,7 @@ const ObsidianEditor = forwardRef<ObsidianEditorHandle, Props>(function Obsidian
 
       {/* Status bar */}
       <div className="shrink-0 flex items-center justify-end gap-4 h-7 px-3 border-t border-border bg-secondary/40 text-[11.5px] text-muted-foreground tabular-nums">
-        {dragging && <span className="mr-auto text-primary">Drop images to upload</span>}
+        {dragging && <span className="mr-auto text-primary">Drop images or PDFs to upload</span>}
         <span>{stats.words.toLocaleString()} words</span>
         <span>{stats.chars.toLocaleString()} characters</span>
       </div>

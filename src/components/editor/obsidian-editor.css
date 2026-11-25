@@ -134,3 +134,13 @@
 .obs-editor .cm-tooltip-autocomplete > ul > li[aria-selected] { background: hsl(var(--primary) / 0.12); color: hsl(var(--foreground)); }
 .obs-editor .cm-completionDetail { margin-left: 10px; font-style: normal; font-size: 12px; color: hsl(var(--muted-foreground)); }
 .obs-editor .cm-completionMatchedText { text-decoration: none; font-weight: 600; color: hsl(var(--primary)); }
+
+.obs-editor .cm-lp-pdf {
+  display: inline-flex; align-items: center; gap: 8px; margin: 4px 0; padding: 6px 12px 6px 10px;
+  border: 1px solid hsl(var(--border)); border-radius: 6px; background: hsl(var(--secondary));
+  font-size: 0.9em; font-weight: 500; color: hsl(var(--foreground));
+}
+.obs-editor .cm-lp-pdf::before {
+  content: "PDF"; font-size: 10px; font-weight: 700; letter-spacing: 0.04em; color: #fff;
+  background: hsl(var(--primary)); border-radius: 3px; padding: 2px 5px;
+}

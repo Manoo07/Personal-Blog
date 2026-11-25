@@ -1,6 +1,8 @@
 import { isValidElement } from "react";
 import type { Components } from "react-markdown";
 import MermaidDiagram from "@/components/MermaidDiagram";
+import PdfEmbed from "@/components/PdfEmbed";
+import { isPdfUrl } from "@/lib/image-upload";
 
 /** Custom renderers for ReactMarkdown */
 export const markdownComponents: Components = {
@@ -35,6 +37,8 @@ export const markdownComponents: Components = {
   },
 
   img({ node: _node, ...props }) {
+    // ![title](…/file.pdf) embeds a PDF reader, like Obsidian's ![[file.pdf]]
+    if (typeof props.src === "string" && isPdfUrl(props.src)) return <PdfEmbed src={props.src} title={props.alt} />;
     return <img {...props} loading="lazy" decoding="async" />;
   },
 

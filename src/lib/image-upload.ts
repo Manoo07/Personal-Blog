@@ -13,6 +13,17 @@ export const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 
 export const ALLOWED_IMAGE_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp", "image/avif"] as const;
 
+/** PDFs (reference papers, slides) upload as-is and are embedded as a readable viewer in the post. */
+export const PDF_TYPE = "application/pdf";
+export const MAX_PDF_BYTES = 10 * 1024 * 1024;
+/** Everything the editor's upload button / paste / drop accepts. */
+export const ALLOWED_UPLOAD_TYPES = [...ALLOWED_IMAGE_TYPES, PDF_TYPE];
+
+export const isPdfFile = (f: File) => f.type === PDF_TYPE || /\.pdf$/i.test(f.name);
+export const isUploadableFile = (f: File) => f.type.startsWith("image/") || isPdfFile(f);
+/** Embedded PDFs are written as ![title](…/file.pdf) — the URL path ends in .pdf */
+export const isPdfUrl = (url: string) => /\.pdf(?:$|[?#])/i.test(url);
+
 const MAX_DIMENSION = 2400;
 
 export class ImagePrepError extends Error {}
@@ -66,9 +77,17 @@ async function compress(file: File): Promise<File> {
 
 /** Validate (and if needed compress) a file so the backend will accept it. */
 export async function prepareImageForUpload(file: File): Promise<File> {
+  if (isPdfFile(file)) {
+    if (file.size === 0) throw new ImagePrepError(`"${file.name}" is empty.`);
+    if (file.size > MAX_PDF_BYTES) {
+      throw new ImagePrepError(`"${file.name}" is ${formatMB(file.size)}; PDFs must be under 10 MB.`);
+    }
+    // Some systems report PDFs without a type; the backend needs it
+    return file.type === PDF_TYPE ? file : new File([file], file.name, { type: PDF_TYPE });
+  }
   if (!(ALLOWED_IMAGE_TYPES as readonly string[]).includes(file.type)) {
     throw new ImagePrepError(
-      `"${file.name}" isn't supported (${file.type || "unknown type"}). Use PNG, JPEG, GIF, WebP or AVIF.`
+      `"${file.name}" isn't supported (${file.type || "unknown type"}). Use PNG, JPEG, GIF, WebP, AVIF or PDF.`
     );
   }
   if (file.size === 0) throw new ImagePrepError(`"${file.name}" is empty.`);
